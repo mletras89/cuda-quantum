@@ -50,31 +50,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
     && cd /llvm-project && git checkout $llvm_commit \
     && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
 
-## Build the the LLVM libraries and compiler toolchain needed to build CUDA-Q;
-## The safest option to avoid any compatibility issues is to build an application using these libraries 
-## with the same compiler toolchain that the libraries were compiled with.
-## Since the llvm libraries needed to build CUDA-Q include the compiler toolchain, we can build 
-## CUDA-Q itself with that compiler as well. This is done when llvm is specified as the desired
-## toolchain. For more information about compatibility between different C++ compilers, see e.g.
-## - Itanium C++ ABI and C++ Standard Library implementations
-## - https://libcxx.llvm.org/
-## - https://clang.llvm.org/docs/MSVCCompatibility.html
-## - https://clang.llvm.org/docs/Toolchain.html
-## - https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
-## - https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code%20Gen%20Options
-## - https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#C_002b_002b-Dialect-Options
-#ADD ./scripts/install_toolchain.sh /scripts/install_toolchain.sh
-#ADD ./scripts/build_llvm.sh /scripts/build_llvm.sh
-#
-## Choose llvm_ directory so LLVM install doesn't overwrite itself. The final
-## location will be /opt/llvm (see below). The bootstrap files can stay in the
-## /opt/llvm directory.
-#ENV LLVM_INSTALL_PREFIX=/opt/llvm_
-#ENV PYBIND11_INSTALL_PREFIX=/usr/local/pybind11
-#
-#RUN LLVM_SOURCE=/llvm-project \
-#    source /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t ${toolchain} \
-#    && rm -rf /llvm-project/build
+# Build the the LLVM libraries and compiler toolchain needed to build CUDA-Q;
+# The safest option to avoid any compatibility issues is to build an application using these libraries 
+# with the same compiler toolchain that the libraries were compiled with.
+# Since the llvm libraries needed to build CUDA-Q include the compiler toolchain, we can build 
+# CUDA-Q itself with that compiler as well. This is done when llvm is specified as the desired
+# toolchain. For more information about compatibility between different C++ compilers, see e.g.
+# - Itanium C++ ABI and C++ Standard Library implementations
+# - https://libcxx.llvm.org/
+# - https://clang.llvm.org/docs/MSVCCompatibility.html
+# - https://clang.llvm.org/docs/Toolchain.html
+# - https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
+# - https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code%20Gen%20Options
+# - https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#C_002b_002b-Dialect-Options
+ADD ./scripts/install_toolchain.sh /scripts/install_toolchain.sh
+ADD ./scripts/build_llvm.sh /scripts/build_llvm.sh
+
+# Choose llvm_ directory so LLVM install doesn't overwrite itself. The final
+# location will be /opt/llvm (see below). The bootstrap files can stay in the
+# /opt/llvm directory.
+ENV LLVM_INSTALL_PREFIX=/opt/llvm_
+ENV PYBIND11_INSTALL_PREFIX=/usr/local/pybind11
+
+RUN LLVM_SOURCE=/llvm-project \
+    source /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t ${toolchain} \
+    && rm -rf /llvm-project/build
 #RUN mkdir /pybind11-project && cd /pybind11-project && git init \
 #    && git remote add origin https://github.com/pybind/pybind11 \
 #    && git fetch origin --depth=1 $pybind11_commit && git reset --hard FETCH_HEAD \
