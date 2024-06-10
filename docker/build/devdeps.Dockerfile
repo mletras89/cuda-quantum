@@ -76,7 +76,7 @@ ENV PYBIND11_INSTALL_PREFIX=/usr/local/pybind11
 
 RUN LLVM_SOURCE=/llvm-project \
 #    source /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t ${toolchain} \
-    source /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t LLVM \
+    source /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t llvm \
     && rm -rf /llvm-project/build
 #RUN mkdir /pybind11-project && cd /pybind11-project && git init \
 #    && git remote add origin https://github.com/pybind/pybind11 \
