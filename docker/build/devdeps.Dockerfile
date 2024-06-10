@@ -37,10 +37,10 @@ ARG toolchain=llvm
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install prerequisites for building LLVM.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ninja-build cmake python3 python3-dev python3-pip \
-    && python3 -m pip install --no-cache-dir numpy \
-    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
+#RUN apt-get update && apt-get install -y --no-install-recommends \
+#        ninja-build cmake python3 python3-dev python3-pip \
+#    && python3 -m pip install --no-cache-dir numpy \
+#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
 
 ## Clone the LLVM source code.
 ## Preserve access to the history to be able to cherry pick specific commits.
