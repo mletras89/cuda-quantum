@@ -1,7 +1,7 @@
 {
-	"name": "cuda-quantum-dev-deps",
+	"name": "cuda-quantum",
 	"build": {
-		"dockerfile": "../docker/build/devdeps.Dockerfile",
+		"dockerfile": "../docker/build/cudaq.dev.Dockerfile",
 		"args": { 
 			"destination": "workspaces/host"
 		}
