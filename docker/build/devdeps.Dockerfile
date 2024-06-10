@@ -27,21 +27,21 @@ ARG base_image=debian:12
 FROM ${base_image} as llvmbuild
 SHELL ["/bin/bash", "-c"]
 
-#ARG llvm_commit
-#ARG pybind11_commit
-#ARG toolchain=llvm
-#
-## When a dialogue box would be needed during install, assume default configurations.
-## Set here to avoid setting it for all install commands. 
-## Given as arg to make sure that this value is only set during build but not in the launched container.
-#ARG DEBIAN_FRONTEND=noninteractive
-#
-## Install prerequisites for building LLVM.
-#RUN apt-get update && apt-get install -y --no-install-recommends \
-#        ninja-build cmake python3 python3-dev python3-pip \
-#    && python3 -m pip install --no-cache-dir numpy \
-#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
-#
+ARG llvm_commit
+ARG pybind11_commit
+ARG toolchain=llvm
+
+# When a dialogue box would be needed during install, assume default configurations.
+# Set here to avoid setting it for all install commands. 
+# Given as arg to make sure that this value is only set during build but not in the launched container.
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install prerequisites for building LLVM.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ninja-build cmake python3 python3-dev python3-pip \
+    && python3 -m pip install --no-cache-dir numpy \
+    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
+
 ## Clone the LLVM source code.
 ## Preserve access to the history to be able to cherry pick specific commits.
 #RUN apt-get update && apt-get install -y --no-install-recommends git \
