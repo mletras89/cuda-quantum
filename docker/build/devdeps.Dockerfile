@@ -64,7 +64,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # - https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code%20Gen%20Options
 # - https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#C_002b_002b-Dialect-Options
 #RUN echo "$PWD"
-ADD scripts/install_toolchain.sh /scripts/install_toolchain.sh
+#ADD scripts/install_toolchain.sh /scripts/install_toolchain.sh
+ADD https://github.com/mletras89/cuda-quantum/blob/main/scripts/install_toolchain.sh /scripts/install_toolchain.sh  
 #RUN cp -f ./scripts/install_toolchain.sh /scripts/install_toolchain.sh
 #ADD ./scripts/build_llvm.sh /scripts/build_llvm.sh
 
