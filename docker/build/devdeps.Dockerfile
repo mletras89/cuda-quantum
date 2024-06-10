@@ -63,7 +63,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # - https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
 # - https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code%20Gen%20Options
 # - https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#C_002b_002b-Dialect-Options
-ADD ./scripts/install_toolchain.sh /scripts/install_toolchain.sh
+RUN ls -la
+#ADD ./scripts/install_toolchain.sh /scripts/install_toolchain.sh
 #ADD ./scripts/build_llvm.sh /scripts/build_llvm.sh
 
 ## Choose llvm_ directory so LLVM install doesn't overwrite itself. The final
