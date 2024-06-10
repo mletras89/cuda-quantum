@@ -22,7 +22,7 @@
 # toolchain, add support for it to the install_toolchain.sh script. If the toolchain is set to llvm, 
 # then the toolchain will be built from source.
 
-ARG base_image=ubuntu:latest
+ARG base_image=mcr.microsoft.com/devcontainers/base:bullseye
 FROM ${base_image} as llvmbuild
 SHELL ["/bin/bash", "-c"]
 
