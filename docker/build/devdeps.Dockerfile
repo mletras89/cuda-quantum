@@ -71,12 +71,12 @@ ADD https://github.com/mletras89/cuda-quantum/blob/main/scripts/build_llvm.sh /s
 # Choose llvm_ directory so LLVM install doesn't overwrite itself. The final
 # location will be /opt/llvm (see below). The bootstrap files can stay in the
 # /opt/llvm directory.
-ENV LLVM_INSTALL_PREFIX=/opt/llvm_
-ENV PYBIND11_INSTALL_PREFIX=/usr/local/pybind11
-
-RUN LLVM_SOURCE=/llvm-project \
-    sh /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t ${toolchain} \
-    && rm -rf /llvm-project/build
+#ENV LLVM_INSTALL_PREFIX=/opt/llvm_
+#ENV PYBIND11_INSTALL_PREFIX=/usr/local/pybind11
+#
+#RUN LLVM_SOURCE=/llvm-project \
+#    source /scripts/install_toolchain.sh -e /opt/llvm/bootstrap -t ${toolchain} \
+#    && rm -rf /llvm-project/build
 #RUN mkdir /pybind11-project && cd /pybind11-project && git init \
 #    && git remote add origin https://github.com/pybind/pybind11 \
 #    && git fetch origin --depth=1 $pybind11_commit && git reset --hard FETCH_HEAD \
