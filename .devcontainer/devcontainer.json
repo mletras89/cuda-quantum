@@ -1,5 +1,5 @@
 {
-	"name": "cuda-quantum-dev",
+	"name": "cuda-quantum-dev-deps",
 	"build": {
 		"dockerfile": "../docker/build/devdeps.Dockerfile",
 		"args": { 
