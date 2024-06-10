@@ -89,32 +89,32 @@ RUN mkdir /pybind11-project && cd /pybind11-project && git init \
     && cd .. && rm -rf /pybind11-project
 
 ## Now we install LLVM to the final location
-#ENV LLVM_INSTALL_PREFIX=/opt/llvm
-#
-## Enable compiler-rt in this build (-r)
-#RUN source /opt/llvm/bootstrap/init_command.sh && \
-#    bash /scripts/build_llvm.sh -s /llvm-project -c Release -v -r \
-#    && rm -rf /llvm-project 
-#
-## Update bootstrap files to point to new installation
-#RUN sed -i "s|/opt/llvm_|/opt/llvm|" /opt/llvm/bootstrap/init_command.sh
-#RUN sed -i "s|/opt/llvm_|/opt/llvm|" /opt/llvm/bootstrap/install_toolchain.sh
-#
-#FROM llvmbuild as prereqs
-#ADD ./scripts/install_prerequisites.sh /scripts/install_prerequisites.sh
-#RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-#    && export LLVM_INSTALL_PREFIX=/opt/llvm \
-#    && export BLAS_INSTALL_PREFIX=/usr/local/blas \
-#    && export ZLIB_INSTALL_PREFIX=/usr/local/zlib \
-#    && export OPENSSL_INSTALL_PREFIX=/usr/local/openssl \
-#    && export CURL_INSTALL_PREFIX=/usr/local/curl \
-#    # It would be nice to also build the prerequisites
-#    # using the same toolchain as CUDA-Q by default.
-#    && source /opt/llvm/bootstrap/init_command.sh \
-#    && bash /scripts/install_prerequisites.sh \
-#    && apt-get remove -y ca-certificates \
-#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
-#
+ENV LLVM_INSTALL_PREFIX=/opt/llvm
+
+# Enable compiler-rt in this build (-r)
+RUN source /opt/llvm/bootstrap/init_command.sh && \
+    bash /scripts/build_llvm.sh -s /llvm-project -c Release -v -r \
+    && rm -rf /llvm-project 
+
+# Update bootstrap files to point to new installation
+RUN sed -i "s|/opt/llvm_|/opt/llvm|" /opt/llvm/bootstrap/init_command.sh
+RUN sed -i "s|/opt/llvm_|/opt/llvm|" /opt/llvm/bootstrap/install_toolchain.sh
+
+FROM llvmbuild as prereqs
+ADD https://raw.githubusercontent.com/mletras89/cuda-quantum/main/scripts/install_prerequisites.sh /scripts/install_prerequisites.sh
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && export LLVM_INSTALL_PREFIX=/opt/llvm \
+    && export BLAS_INSTALL_PREFIX=/usr/local/blas \
+    && export ZLIB_INSTALL_PREFIX=/usr/local/zlib \
+    && export OPENSSL_INSTALL_PREFIX=/usr/local/openssl \
+    && export CURL_INSTALL_PREFIX=/usr/local/curl \
+    # It would be nice to also build the prerequisites
+    # using the same toolchain as CUDA-Q by default.
+    && source /opt/llvm/bootstrap/init_command.sh \
+    && bash /scripts/install_prerequisites.sh \
+    && apt-get remove -y ca-certificates \
+    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 ## Pre-built binaries for doxygen are only available for x86_64.
 #FROM ${base_image} as doxygenbuild
 #RUN if [ "$(uname -m)" != "x86_64" ]; then \
