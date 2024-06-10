@@ -45,11 +45,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ## Clone the LLVM source code.
 ## Preserve access to the history to be able to cherry pick specific commits.
-#RUN apt-get update && apt-get install -y --no-install-recommends git \
-#    && git clone --filter=tree:0 https://github.com/llvm/llvm-project /llvm-project \
-#    && cd /llvm-project && git checkout $llvm_commit \
-#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
-#
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && git clone --filter=tree:0 https://github.com/llvm/llvm-project /llvm-project \
+    && cd /llvm-project && git checkout $llvm_commit \
+    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/* 
+
 ## Build the the LLVM libraries and compiler toolchain needed to build CUDA-Q;
 ## The safest option to avoid any compatibility issues is to build an application using these libraries 
 ## with the same compiler toolchain that the libraries were compiled with.
