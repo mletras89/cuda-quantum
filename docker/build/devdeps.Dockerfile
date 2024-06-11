@@ -100,20 +100,20 @@ RUN LLVM_SOURCE=/llvm-project \
 #RUN sed -i "s|/opt/llvm_|/opt/llvm|" /opt/llvm/bootstrap/init_command.sh
 #RUN sed -i "s|/opt/llvm_|/opt/llvm|" /opt/llvm/bootstrap/install_toolchain.sh
 #
-FROM llvmbuild as prereqs
-ADD https://raw.githubusercontent.com/mletras89/cuda-quantum/main/scripts/install_prerequisites.sh /scripts/install_prerequisites.sh
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-    && export LLVM_INSTALL_PREFIX=/opt/llvm \
-    && export BLAS_INSTALL_PREFIX=/usr/local/blas \
-    && export ZLIB_INSTALL_PREFIX=/usr/local/zlib \
-    && export OPENSSL_INSTALL_PREFIX=/usr/local/openssl \
-    && export CURL_INSTALL_PREFIX=/usr/local/curl \
-    # It would be nice to also build the prerequisites
-    # using the same toolchain as CUDA-Q by default.
-    && source /opt/llvm/bootstrap/init_command.sh \
-    && bash /scripts/install_prerequisites.sh \
-    && apt-get remove -y ca-certificates \
-    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
+#FROM llvmbuild as prereqs
+#ADD https://raw.githubusercontent.com/mletras89/cuda-quantum/main/scripts/install_prerequisites.sh /scripts/install_prerequisites.sh
+#RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+#    && export LLVM_INSTALL_PREFIX=/opt/llvm \
+#    && export BLAS_INSTALL_PREFIX=/usr/local/blas \
+#    && export ZLIB_INSTALL_PREFIX=/usr/local/zlib \
+#    && export OPENSSL_INSTALL_PREFIX=/usr/local/openssl \
+#    && export CURL_INSTALL_PREFIX=/usr/local/curl \
+#    # It would be nice to also build the prerequisites
+#    # using the same toolchain as CUDA-Q by default.
+#    && source /opt/llvm/bootstrap/init_command.sh \
+#    && bash /scripts/install_prerequisites.sh \
+#    && apt-get remove -y ca-certificates \
+#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Pre-built binaries for doxygen are only available for x86_64.
 #FROM ${base_image} as doxygenbuild
@@ -153,54 +153,54 @@ ENV PATH="$PATH:$LLVM_INSTALL_PREFIX/bin/"
 # a wrapper script so that the path that we set CC and CXX to is independent 
 # on the installed toolchain. Unfortunately, a symbolic link won't work.
 # Using update-alternatives for c++ and cc could maybe be a better option.
-RUN source "$LLVM_INSTALL_PREFIX/bootstrap/init_command.sh" \
-    && echo -e '#!/bin/bash\n"'$CC'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
-    && echo -e '#!/bin/bash\n"'$CXX'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cxx" \
-    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
-    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cxx"
-ENV CC="$LLVM_INSTALL_PREFIX/bootstrap/cc"
-ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
-
-# Install the C++ standard library. We could alternatively build libc++ 
-# as part of the LLVM build and compile against that instead of libstdc++.
-RUN apt-get update && apt-get install -y --no-install-recommends libstdc++-12-dev \
-    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Copy over additional prerequisites.
-ENV BLAS_INSTALL_PREFIX=/usr/local/blas
-ENV ZLIB_INSTALL_PREFIX=/usr/local/zlib
-ENV OPENSSL_INSTALL_PREFIX=/usr/local/openssl
-ENV CURL_INSTALL_PREFIX=/usr/local/curl
-COPY --from=prereqs /usr/local/blas "$BLAS_INSTALL_PREFIX"
-COPY --from=prereqs /usr/local/zlib "$ZLIB_INSTALL_PREFIX"
-COPY --from=prereqs /usr/local/openssl "$OPENSSL_INSTALL_PREFIX"
-COPY --from=prereqs /usr/local/curl "$CURL_INSTALL_PREFIX"
-
-## Install additional dependencies required to build and test CUDA-Q.
-RUN apt-get update && apt-get install --no-install-recommends -y wget ca-certificates \
-    && wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-$(uname -m).tar.gz \
-    && tar xf cmake-3.26.4* && mv cmake-3.26.4-linux-$(uname -m)/ /usr/local/cmake-3.26/ && rm -rf cmake-3.26.4* \
-    # NOTE: apt-get remove -y ca-certificates also remove python3-pip.
-    && apt-get remove -y wget ca-certificates \
-    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
-ENV PATH="${PATH}:/usr/local/cmake-3.26/bin"
-# We must use h5py<3.11 because 3.11 doesn't include aarch64 Linux wheels.
-# https://github.com/h5py/h5py/issues/2408
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git ninja-build file \
-        python3 python3-pip libpython3-dev \
-    && python3 -m pip install --no-cache-dir \
-        lit pytest numpy \
-        fastapi uvicorn pydantic requests llvmlite \
-        pyspelling pymdown-extensions \
-        scipy==1.10.1 openfermionpyscf==0.5 'h5py<3.11' \
-    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Install additional tools for CUDA-Q documentation generation.
-COPY --from=doxygenbuild /usr/local/bin/doxygen /usr/local/bin/doxygen
-ENV PATH="${PATH}:/usr/local/bin"
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip pandoc aspell aspell-en \
-    && python3 -m pip install --no-cache-dir \
-        ipython==8.15.0 pandoc==2.3 sphinx==5.3.0 sphinx_rtd_theme==1.2.0 sphinx-reredirects==0.1.2 \
-        sphinx-copybutton==0.5.2 sphinx_inline_tabs==2023.4.21 enum-tools[sphinx] breathe==4.34.0 \
-        nbsphinx==0.9.2 sphinx_gallery==0.13.0 myst-parser==1.0.0 ipykernel==6.29.4 notebook==7.1.3
+#RUN source "$LLVM_INSTALL_PREFIX/bootstrap/init_command.sh" \
+#    && echo -e '#!/bin/bash\n"'$CC'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
+#    && echo -e '#!/bin/bash\n"'$CXX'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cxx" \
+#    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
+#    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cxx"
+#ENV CC="$LLVM_INSTALL_PREFIX/bootstrap/cc"
+#ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
+#
+## Install the C++ standard library. We could alternatively build libc++ 
+## as part of the LLVM build and compile against that instead of libstdc++.
+#RUN apt-get update && apt-get install -y --no-install-recommends libstdc++-12-dev \
+#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
+#
+## Copy over additional prerequisites.
+#ENV BLAS_INSTALL_PREFIX=/usr/local/blas
+#ENV ZLIB_INSTALL_PREFIX=/usr/local/zlib
+#ENV OPENSSL_INSTALL_PREFIX=/usr/local/openssl
+#ENV CURL_INSTALL_PREFIX=/usr/local/curl
+#COPY --from=prereqs /usr/local/blas "$BLAS_INSTALL_PREFIX"
+#COPY --from=prereqs /usr/local/zlib "$ZLIB_INSTALL_PREFIX"
+#COPY --from=prereqs /usr/local/openssl "$OPENSSL_INSTALL_PREFIX"
+#COPY --from=prereqs /usr/local/curl "$CURL_INSTALL_PREFIX"
+#
+### Install additional dependencies required to build and test CUDA-Q.
+#RUN apt-get update && apt-get install --no-install-recommends -y wget ca-certificates \
+#    && wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-$(uname -m).tar.gz \
+#    && tar xf cmake-3.26.4* && mv cmake-3.26.4-linux-$(uname -m)/ /usr/local/cmake-3.26/ && rm -rf cmake-3.26.4* \
+#    # NOTE: apt-get remove -y ca-certificates also remove python3-pip.
+#    && apt-get remove -y wget ca-certificates \
+#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
+#ENV PATH="${PATH}:/usr/local/cmake-3.26/bin"
+## We must use h5py<3.11 because 3.11 doesn't include aarch64 Linux wheels.
+## https://github.com/h5py/h5py/issues/2408
+#RUN apt-get update && apt-get install -y --no-install-recommends \
+#        git ninja-build file \
+#        python3 python3-pip libpython3-dev \
+#    && python3 -m pip install --no-cache-dir \
+#        lit pytest numpy \
+#        fastapi uvicorn pydantic requests llvmlite \
+#        pyspelling pymdown-extensions \
+#        scipy==1.10.1 openfermionpyscf==0.5 'h5py<3.11' \
+#    && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*
+#
+## Install additional tools for CUDA-Q documentation generation.
+#COPY --from=doxygenbuild /usr/local/bin/doxygen /usr/local/bin/doxygen
+#ENV PATH="${PATH}:/usr/local/bin"
+#RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip pandoc aspell aspell-en \
+#    && python3 -m pip install --no-cache-dir \
+#        ipython==8.15.0 pandoc==2.3 sphinx==5.3.0 sphinx_rtd_theme==1.2.0 sphinx-reredirects==0.1.2 \
+#        sphinx-copybutton==0.5.2 sphinx_inline_tabs==2023.4.21 enum-tools[sphinx] breathe==4.34.0 \
+#        nbsphinx==0.9.2 sphinx_gallery==0.13.0 myst-parser==1.0.0 ipykernel==6.29.4 notebook==7.1.3
