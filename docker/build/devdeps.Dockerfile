@@ -153,14 +153,14 @@ ENV PATH="$PATH:$LLVM_INSTALL_PREFIX/bin/"
 # a wrapper script so that the path that we set CC and CXX to is independent 
 # on the installed toolchain. Unfortunately, a symbolic link won't work.
 # Using update-alternatives for c++ and cc could maybe be a better option.
-#RUN source "$LLVM_INSTALL_PREFIX/bootstrap/init_command.sh" \
-#    && echo -e '#!/bin/bash\n"'$CC'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
-#    && echo -e '#!/bin/bash\n"'$CXX'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cxx" \
-#    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
-#    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cxx"
-#ENV CC="$LLVM_INSTALL_PREFIX/bootstrap/cc"
-#ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
-#
+RUN source "$LLVM_INSTALL_PREFIX/bootstrap/init_command.sh" \
+    && echo -e '#!/bin/bash\n"'$CC'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
+    && echo -e '#!/bin/bash\n"'$CXX'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cxx" \
+    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
+    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cxx"
+ENV CC="$LLVM_INSTALL_PREFIX/bootstrap/cc"
+ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
+
 ## Install the C++ standard library. We could alternatively build libc++ 
 ## as part of the LLVM build and compile against that instead of libstdc++.
 #RUN apt-get update && apt-get install -y --no-install-recommends libstdc++-12-dev \
