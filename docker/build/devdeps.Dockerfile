@@ -84,8 +84,8 @@ RUN mkdir /pybind11-project && cd /pybind11-project && git init \
     && git remote add origin https://github.com/pybind/pybind11 \
     && git fetch origin --depth=1 $pybind11_commit && git reset --hard FETCH_HEAD \
     && source /opt/llvm/bootstrap/init_command.sh  \ 
-    && mkdir -p /pybind11-project/build && cd /pybind11-project/build 
-#    && cmake -G Ninja ../ -DCMAKE_INSTALL_PREFIX="$PYBIND11_INSTALL_PREFIX" \
+    && mkdir -p /pybind11-project/build && cd /pybind11-project/build \ 
+    && cmake -G Ninja ../ -DCMAKE_INSTALL_PREFIX="$PYBIND11_INSTALL_PREFIX" 
 #    && cmake --build . --target install --config Release \
 #    && cd .. && rm -rf /pybind11-project
 
