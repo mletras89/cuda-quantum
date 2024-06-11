@@ -23,7 +23,8 @@
 # then the toolchain will be built from source.
 
 #ARG base_image=mcr.microsoft.com/devcontainers/base:bullseye
-ARG base_image=debian:12
+#ARG base_image=debian:12
+ARG base_image=ubuntu:latest
 FROM ${base_image} as llvmbuild
 SHELL ["/bin/bash", "-c"]
 
@@ -133,33 +134,33 @@ RUN LLVM_SOURCE=/llvm-project \
 #        && apt-get autoremove -y --purge && apt-get clean && rm -rf /var/lib/apt/lists/*; \
 #    fi
 
-FROM ${base_image}
-SHELL ["/bin/bash", "-c"]
+#FROM ${base_image}
+#SHELL ["/bin/bash", "-c"]
 
 # When a dialogue box would be needed during install, assume default configurations.
 # Set here to avoid setting it for all install commands. 
 # Given as arg to make sure that this value is only set during build but not in the launched container.
-ARG DEBIAN_FRONTEND=noninteractive
-ENV HOME=/home SHELL=/bin/bash LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+#ARG DEBIAN_FRONTEND=noninteractive
+#ENV HOME=/home SHELL=/bin/bash LANG=C.UTF-8 LC_ALL=C.UTF-8
+#ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 
 # Copy over the llvm build dependencies.
-COPY --from=llvmbuild /opt/llvm /opt/llvm
-ENV LLVM_INSTALL_PREFIX=/opt/llvm
-ENV PATH="$PATH:$LLVM_INSTALL_PREFIX/bin/"
+#COPY --from=llvmbuild /opt/llvm /opt/llvm
+#ENV LLVM_INSTALL_PREFIX=/opt/llvm
+#ENV PATH="$PATH:$LLVM_INSTALL_PREFIX/bin/"
 
 # Install the C/C++ compiler toolchain with which the LLVM dependencies have
 # been built. CUDA-Q needs to be built with that same toolchain. We use
 # a wrapper script so that the path that we set CC and CXX to is independent 
 # on the installed toolchain. Unfortunately, a symbolic link won't work.
 # Using update-alternatives for c++ and cc could maybe be a better option.
-RUN source "$LLVM_INSTALL_PREFIX/bootstrap/init_command.sh" \
-    && echo -e '#!/bin/bash\n"'$CC'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
-    && echo -e '#!/bin/bash\n"'$CXX'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cxx" \
-    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
-    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cxx"
-ENV CC="$LLVM_INSTALL_PREFIX/bootstrap/cc"
-ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
+#RUN source "$LLVM_INSTALL_PREFIX/bootstrap/init_command.sh" \
+#    && echo -e '#!/bin/bash\n"'$CC'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
+#    && echo -e '#!/bin/bash\n"'$CXX'" "$@"' > "$LLVM_INSTALL_PREFIX/bootstrap/cxx" \
+#    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cc" \
+#    && chmod +x "$LLVM_INSTALL_PREFIX/bootstrap/cxx"
+#ENV CC="$LLVM_INSTALL_PREFIX/bootstrap/cc"
+#ENV CXX="$LLVM_INSTALL_PREFIX/bootstrap/cxx"
 
 ## Install the C++ standard library. We could alternatively build libc++ 
 ## as part of the LLVM build and compile against that instead of libstdc++.
