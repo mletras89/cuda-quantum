@@ -23,7 +23,6 @@ bool isValidExpVal(double value) {
 
 CUDAQ_TEST(MQSSTester, checkSampleSync) {
   std::string home = std::getenv("HOME");
-  std::cout << "HOME " << home << std::endl;
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
       fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
@@ -31,7 +30,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
-  std::cout << "platform.name():" << platform.name() << std::endl;
+  //std::cout << "platform.name():" << platform.name() << std::endl;
   auto kernel = cudaq::make_kernel();
 
   auto qubit = kernel.qalloc(2);
@@ -39,7 +38,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   kernel.mz(qubit[0]);
   auto name = cudaq::getKernelName(kernel);
   //auto quakeCode = cudaq::get_quake_by_name(kernel.name()); //, false);
-  std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;
+  //std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;
   auto counts = cudaq::sample(kernel);
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
