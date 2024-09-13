@@ -93,3 +93,6 @@ apps/
 
 # JetBrains IDE files
 .idea
+
+# linux temp files
+*.sw*
