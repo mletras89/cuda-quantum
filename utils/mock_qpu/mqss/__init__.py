@@ -86,7 +86,7 @@ async def postJob(job: Job,
 
     print("Kernel name = ", kernelFunctionName)
     print("Requires {} qubits".format(numQubitsRequired))
-    print("newId {}".format(newId))
+    #print("newId {}".format(newId))
 
     # Fake resuls
     results = {}
@@ -102,7 +102,7 @@ async def postJob(job: Job,
 # until we return the job results
 @app.get("/job/{jobId}")
 async def getJob(jobId: str):
-    print("Entering to the get")
+    #print("Entering to the get")
     global countJobGetRequests, createdJobs, shots
 
     # Simulate asynchronous execution
