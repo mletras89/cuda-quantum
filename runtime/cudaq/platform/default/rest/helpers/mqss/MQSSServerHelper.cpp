@@ -102,14 +102,13 @@ public:
 ServerJobPayload
 MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   
-  std::cout << "I AM DOING SOMETHING HERE " << std::endl;
   std::vector<ServerMessage> messages;
   for (auto &circuitCode : circuitCodes) {
-    std::cout << "Processing " << circuitCode.name << std::endl;
+    //std::cout << "Processing " << circuitCode.name << std::endl;
     // Construct the job itself
     ServerMessage j;
     j["machine"] = machine;
-    j["language"] = "QIR 1.0";
+    j["language"] = "Quake";
     j["program"] = circuitCode.code;
     j["priority"] = "normal";
     j["count"] = shots;
@@ -272,7 +271,6 @@ MQSSServerHelper::generateRequestHeader() const {
       {"Content-Type", "application/json"},
       {"Connection", "keep-alive"},
       {"Accept", "*/*"}};
-  std::cout << "api key" << apiKey << std::endl;
   return headers;
 }
 
