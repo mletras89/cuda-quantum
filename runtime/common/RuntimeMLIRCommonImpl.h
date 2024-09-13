@@ -510,6 +510,28 @@ void registerToOpenQASMTranslation() {
       });
 }
 
+void registerToMQSSTranslation(){
+  cudaq::TranslateFromMLIRRegistration reg(
+    "mqss", "do not perform any translation and send circuit as it is to the MQSS-QRM",
+    [](mlir::Operation *op, llvm::raw_string_ostream &output,
+         const std::string &additionalPasses, bool printIR,
+         bool printIntermediateMLIR) {
+        ScopedTraceWithContext(cudaq::TIMING_JIT, "MQSS translation");
+        mlir::PassManager pm(op->getContext());
+        if (printIntermediateMLIR)
+          pm.enableIRPrinting();
+        //cudaq::opt::addPipelineTranslateToOpenQASM(pm);
+        mlir::DefaultTimingManager tm;
+        tm.setEnabled(cudaq::isTimingTagEnabled(cudaq::TIMING_JIT_PASSES));
+        auto timingScope = tm.getRootScope(); // starts the timer
+        pm.enableTiming(timingScope);         // do this right before pm.run
+        // actually the only line of code that I need to write is
+	op->print(output);
+        return success();
+         }
+  );
+}
+
 void registerToIQMJsonTranslation() {
   cudaq::TranslateFromMLIRRegistration reg(
       "iqm", "translate from quake to IQM's json format",
