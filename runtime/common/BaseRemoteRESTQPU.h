@@ -287,6 +287,11 @@ public:
         postCodeGenPasses = match[1].str();
       }
     }
+    /*std::cout << "LETRAS: codegenTranslation:" << codegenTranslation << std::endl;
+    if (codegenTranslation == "MQSS"){
+	std::cout << "LETRAS: sending code MQSS" << std::endl;
+    }*/
+	
     std::string allowEarlyExitSetting =
         (codegenTranslation == "qir-adaptive") ? "1" : "0";
     passPipelineConfig = std::string("cc-loop-unroll{allow-early-exit=") +
@@ -349,6 +354,7 @@ public:
         }
       }
     }
+    //std::cout << "Letras: output_names "  << output_names  <<std::endl;
     return output_names;
   }
 
@@ -484,7 +490,21 @@ public:
     }
 
     // Get the code gen translation
+    //std::cout << "LETRAS: codegenTranslation " << codegenTranslation << std::endl;
+    // Quake code before lowering it to QIR or QASM
+    //std::cout << "LETRAS: code before lowering it to QIR or QASM" << std::endl;
+    for (auto &[name, moduleOpI] : modules){
+      std::string codeStri;
+      llvm::raw_string_ostream outStr(codeStri);
+        if (disableMLIRthreading)
+          moduleOpI.getContext()->disableMultithreading();
+        //std::cout << "LETRAS: module name " << name << std::endl;
+        //std::cout << "LETRAS: module " << std::endl;
+        //moduleOpI->dump();
+    }
     auto translation = cudaq::getTranslation(codegenTranslation);
+    //std::string tName = std::string(translation.getDescription());
+    //std::cout << "LETRAS: Translation " << tName << std::endl;
 
     // Apply user-specified codegen
     std::vector<cudaq::KernelExecution> codes;
