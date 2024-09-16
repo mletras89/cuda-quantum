@@ -12,6 +12,8 @@
 	"hostRequirements": {
 		"gpu": "optional"
 	},
+	"mounts": [
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,readonly,type=bind"],
 	// To use certain debugging tools, you may want uncomment the two lines below.
 	// Be mindful of security implications when you do. See also 
 	// - https://github.com/rr-debugger/rr/wiki/Docker
