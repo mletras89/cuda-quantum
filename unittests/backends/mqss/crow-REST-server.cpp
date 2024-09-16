@@ -1,3 +1,45 @@
+/*-------------------------------------------------------------------------
+ This code and any associated documentation is provided "as is"
+
+ IN NO EVENT SHALL LEIBNIZ-RECHENZENTRUM (LRZ) BE LIABLE TO ANY PARTY FOR
+ DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
+ OF THE USE OF THIS CODE AND ITS DOCUMENTATION, EVEN IF LEIBNIZ-RECHENZENTRUM
+ (LRZ) HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ THE AFOREMENTIONED EXCLUSIONS OF LIABILITY DO NOT APPLY IN CASE OF INTENT
+ BY LEIBNIZ-RECHENZENTRUM (LRZ).
+
+ LEIBNIZ-RECHENZENTRUM (LRZ), SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+ BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ FOR A PARTICULAR PURPOSE.
+
+ THE CODE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, LEIBNIZ-RECHENZENTRUM (LRZ)
+ HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+ MODIFICATIONS.
+ -------------------------------------------------------------------------
+
+  @author Martin Letras
+  @date   September 2024
+  @version 1.0
+  @ brief
+	Fake server used to test the connection of CudaQ and the MQSS.
+	This file is a cpp version of the fake server provided by Nvidia.
+	The server runs on "0.0.0.0" on port 62440.
+	The HTTP server responds to the following queries:
+		- "/login" just a normal login
+		- "/job" this creates a job in the server, as described in the
+		  Struct Job. The server receives a JSON string containing the
+		  name, count (shots) and the program (quake). It returns a job ID
+		  used latter to veriy the job status or to obtaine the results.
+		- "/job/<string>" this receives the job ID. If the job is still
+		  running, it will return {"status", "running"}. Once the job is
+		  done, it returns {"status", "running","results",
+                  {MOCK_SERVER_RESULTS, ACTUAL RESULTS}}.
+
+ *******************************************************************************
+ * This source code and the accompanying materials are made available under    *
+ * the terms of the Apache License 2.0 which accompanies this distribution.    *
+ ******************************************************************************/
+
 #include "crow.h"  // Include Crow header file
 #include <unordered_map>
 #include <uuid/uuid.h>  // For generating UUIDs
