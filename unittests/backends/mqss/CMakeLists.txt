@@ -26,3 +26,13 @@ target_link_libraries(test_mqss
 
 configure_file("MQSSStartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqss/MQSSStartServerAndTest.sh" @ONLY)
 add_test(NAME mqss-tests COMMAND bash MQSSStartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/MQSS/)
+
+# Add Crow headers
+include_directories("/workspaces/Crow/")
+
+add_executable(CrowRestServer crow-REST-server.cpp)
+# Link with uuid library
+target_link_libraries(CrowRestServer uuid)
+
+configure_file("CPPMQSSStartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqss/CPPMQSSStartServerAndTest.sh" @ONLY)
+add_test(NAME mqss-cpp-tests COMMAND bash CPPMQSSStartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/MQSS/)
