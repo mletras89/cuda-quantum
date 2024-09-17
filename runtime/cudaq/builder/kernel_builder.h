@@ -22,7 +22,7 @@
 #include <string>
 #include <variant>
 #include <vector>
-
+//#include <iostream>
 // Goal here is to keep MLIR out of user code!
 namespace mlir {
 class Type;
@@ -862,6 +862,7 @@ public:
 
   /// @brief Lower the Quake code to the LLVM Dialect, call `PassManager`.
   void jitCode(std::vector<std::string> extraLibPaths = {}) override {
+    //std::cout << "JITCODE" << std::endl;
     auto [wasChanged, ptr] =
         details::jitCode(*opBuilder, jitEngine.get(), jitEngineToModuleHash,
                          kernelName, extraLibPaths, stateVectorStorage);
@@ -885,6 +886,7 @@ public:
       // Scoped locking since jitCode is not thread-safe while this jitAndInvoke
       // can be invoked by kernel_builder::operator()(Args... args) in a
       // multi-threaded context.
+      //std::cout << "here JITANDINVOKE" << std::endl;
       jitCode(extraLibPaths);
     }
     details::invokeCode(*opBuilder, jitEngine.get(), kernelName, argsArray,
@@ -903,7 +905,7 @@ public:
 
   /// @brief Call operator that takes an array of opaque pointers for the
   /// function arguments
-  void operator()(void **argsArray) { jitAndInvoke(argsArray); }
+  void operator()(void **argsArray) {/*std::cout << "HERE IT IS ONLY SIMULATING" <<std::endl;*/ jitAndInvoke(argsArray); }
 
   /// Expose the `get<N>()` method necessary for enabling structured bindings on
   /// a custom type
