@@ -5,10 +5,12 @@
  * This source code and the accompanying materials are made available under    *
  * the terms of the Apache License 2.0 which accompanies this distribution.    *
  ******************************************************************************/
+#include "cudaq.h"
 #include "common/Logger.h"
 #include "common/RestClient.h"
 #include "common/ServerHelper.h"
 #include "cudaq/utils/cudaq_utils.h"
+
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -108,13 +110,36 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     // Construct the job itself
     ServerMessage j;
     j["machine"] = machine;
+    j["count"] = shots;  
+    j["name"] = circuitCode.name;
+    j["circuitFile"] = "circuitFile";
+    j["circuitFileType"] = "circuitFileType";
+    j["resultDestination"] = "resultDestination";
+    j["preferredQPU"] = "iqm";
+    j["priority"] = 1;
+    j["optimizationLevel"] = 1;   
+    j["noModify"] = false;  
+    j["transpilerFlag"] = false;  
+    j["resultType"] = 100; 
     j["language"] = "Quake";
     j["program"] = circuitCode.code;
-    j["priority"] = "normal";
-    j["count"] = shots;
+    j["circuit"] = circuitCode.code;
+    j["additionalInformation"] = "Dummy information...";
     j["options"] = nullptr;
-    j["name"] = circuitCode.name;
+
+    // Get the current time as a time_point
+    auto now = std::chrono::system_clock::now();
+    // Convert time_point to time_t (which holds time in seconds)
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    // Format the time as a string
+    std::ostringstream timeStream;
+    timeStream << std::put_time(std::localtime(&currentTime), "%Y-%m-%d %H:%M:%S");
+
+    j["submitTime"] = timeStream.str();  
+    std::cout << "kernel name:" << circuitCode.name << std::endl;
+  
     messages.push_back(j);
+
   }
 
   // Get the tokens we need
@@ -364,7 +389,7 @@ std::string searchMQSSAPIKey(std::string &key, std::string &refreshKey,
                          std::string userSpecifiedConfig) {
   std::string hwConfig;
   // Allow someone to tweak this with an environment variable
-  if (auto creds = std::getenv("CUDAQ_QUANTINUUM_CREDENTIALS"))
+  if (auto creds = std::getenv("CUDAQ_MQSS_CREDENTIALS"))
     hwConfig = std::string(creds);
   else if (!userSpecifiedConfig.empty())
     hwConfig = userSpecifiedConfig;
