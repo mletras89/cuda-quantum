@@ -27,8 +27,8 @@
 
 namespace mqss {
 
-/// @brief The RestClient exposes a simple REST GET/POST
-/// interface for interacting with remote REST servers.
+/// @brief The RabbitMQ client exposes an interface
+/// to communicate to MQSS
 class RabbitMQClient {
 protected:
   // Use verbose printout
