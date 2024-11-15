@@ -55,6 +55,21 @@ if(OPENSSL_FOUND)
   target_compile_definitions(${LIBRARY_NAME} PRIVATE -DCUDAQ_RESTCLIENT_AVAILABLE)
 endif()
 
+# building the RabbitMQClient
+message(STATUS "Building the RabbitMQ Client.")
+# Find the RabbitMQ C library
+find_package(PkgConfig REQUIRED)
+
+# Find RabbitMQ using pkg-config
+pkg_check_modules(RABBITMQ REQUIRED librabbitmq)
+include_directories(${RABBITMQ_INCLUDE_DIRS})
+
+target_sources(${LIBRARY_NAME} PRIVATE RabbitMQClient.cpp)
+target_link_libraries(${LIBRARY_NAME} 
+                      PRIVATE 
+                      ${RABBITMQ_LIBRARIES}
+                      uuid)
+# End building RabbitMQClient
 
 # Add a flag to indicate this is a debug build
 string(TOUPPER "${CMAKE_BUILD_TYPE}" CUDAQ_UPPERCASE_CMAKE_BUILD_TYPE)
