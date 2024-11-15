@@ -1,7 +1,42 @@
-/*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
- * All rights reserved.                                                        *
- *                                                                             *
+/*-------------------------------------------------------------------------
+ This code and any associated documentation is provided "as is"
+
+ IN NO EVENT SHALL LEIBNIZ-RECHENZENTRUM (LRZ) BE LIABLE TO ANY PARTY FOR
+ DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
+ OF THE USE OF THIS CODE AND ITS DOCUMENTATION, EVEN IF LEIBNIZ-RECHENZENTRUM
+ (LRZ) HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ THE AFOREMENTIONED EXCLUSIONS OF LIABILITY DO NOT APPLY IN CASE OF INTENT
+ BY LEIBNIZ-RECHENZENTRUM (LRZ).
+
+ LEIBNIZ-RECHENZENTRUM (LRZ), SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+ BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ FOR A PARTICULAR PURPOSE.
+
+ THE CODE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, LEIBNIZ-RECHENZENTRUM (LRZ)
+ HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+ MODIFICATIONS.
+ -------------------------------------------------------------------------
+
+@author Martin Letras
+  @date   November 2024
+  @version 1.0
+  @ brief
+  RabbitMQ Client class, used to communicate CudaQ 
+  via RabitMQ to the Munich Quantum Software Stack (MQSS)
+
+  The following method is exposed to communicate CUDAQ to MQSS
+  std::string RabbitMQClient::sendMessageWithReply(const std::string& request_queue,
+                                                 const std::string& message,
+                                                 bool isJSON)
+
+  1) request_queue might be {RABBITMQ_CUDAQ_LOGIN_QUEUE, RABBITMQ_CUDAQ_JOB_QUEUE, RABBITMQ_CUDAQ_JOBSTRING_QUEUE }
+  2) message is the message itself to be sent
+  3) isJSON, specifies if the sent message is a json string
+
+  The function returns as std::string, the response obtained from the MQSS
+  CUDAQ has to interpret the result and cast it to json if is required
+
+ *******************************************************************************
  * This source code and the accompanying materials are made available under    *
  * the terms of the Apache License 2.0 which accompanies this distribution.    *
  ******************************************************************************/
