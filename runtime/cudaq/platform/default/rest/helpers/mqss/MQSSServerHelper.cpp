@@ -7,9 +7,11 @@
  ******************************************************************************/
 #include "cudaq.h"
 #include "common/Logger.h"
-#include "common/RestClient.h"
 #include "common/ServerHelper.h"
 #include "cudaq/utils/cudaq_utils.h"
+
+#include "common/RabbitMQClient.h"
+#include "common/RestClient.h"
 
 #include <fstream>
 #include <iostream>
@@ -106,7 +108,6 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   
   std::vector<ServerMessage> messages;
   for (auto &circuitCode : circuitCodes) {
-    //std::cout << "Processing " << circuitCode.name << std::endl;
     // Construct the job itself
     ServerMessage j;
     j["machine"] = machine;
@@ -136,10 +137,7 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     timeStream << std::put_time(std::localtime(&currentTime), "%Y-%m-%d %H:%M:%S");
 
     j["submitTime"] = timeStream.str();  
-    std::cout << "kernel name:" << circuitCode.name << std::endl;
-  
     messages.push_back(j);
-
   }
 
   // Get the tokens we need
@@ -153,8 +151,7 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   cudaq::info(
       "Created job payload for MQSS, language is quake, targeting {}",
       machine);
-
-  // return the payload
+   // return the payload
   return std::make_tuple(baseUrl + "job", headers, messages);
 }
 
@@ -307,7 +304,7 @@ RestHeaders MQSSServerHelper::getHeaders() {
 void MQSSServerHelper::refreshTokens(bool force_refresh) {
   std::mutex m;
   std::lock_guard<std::mutex> l(m);
-  RestClient client;
+  mqss::RabbitMQClient client;
   auto now = std::chrono::high_resolution_clock::now();
 
   // If the time string is empty, let's add it
@@ -337,7 +334,8 @@ void MQSSServerHelper::refreshTokens(bool force_refresh) {
     auto headers = generateRequestHeader();
     nlohmann::json j;
     j["refresh-token"] = refreshKey;
-    auto response_json = client.post(baseUrl, "login", j, headers);
+    std::string response_str = client.sendMessageWithReply(RABBITMQ_CUDAQ_LOGIN_QUEUE, j.dump(), true);
+    nlohmann::json response_json = nlohmann::json::parse(response_str);
     apiKey = response_json["id-token"].get<std::string>();
     refreshKey = response_json["refresh-token"].get<std::string>();
     std::ofstream out(credentialsPath);
@@ -402,7 +400,6 @@ std::string searchMQSSAPIKey(std::string &key, std::string &refreshKey,
         "Cannot find MQSS Config file with credentials "
         "(~/.mqss_config).");
   }
-
   return hwConfig;
 }
 
