@@ -12,7 +12,7 @@ add_library(cudaq-serverhelper-mqss SHARED MQSSServerHelper.cpp)
 target_link_libraries(cudaq-serverhelper-mqss
   PUBLIC 
     cudaq-common 
-    fmt::fmt-header-only 
+    fmt::fmt-header-only
 )
 install(TARGETS cudaq-serverhelper-mqss DESTINATION lib)
 
