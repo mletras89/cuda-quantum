@@ -24,7 +24,7 @@ target_link_libraries(test_mqss
   cudaq-platform-default 
   gtest_main)
 
-configure_file("MQSSStartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqss/MQSSStartServerAndTest.sh" @ONLY)
+configure_file("MQSSStartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/MQSSStartServerAndTest.sh" @ONLY)
 add_test(NAME mqss-tests COMMAND bash MQSSStartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/MQSS/)
 
 
