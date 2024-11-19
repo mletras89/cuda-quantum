@@ -29,7 +29,7 @@ sample_result future::get() {
   auto headers = serverHelper->getHeaders();
 
   // for adding support for rabbitmq-mqss
-  if (serverHelper->name().find("mqss") != std::string::npos)
+  if (serverHelper->name().find("mqss-hpc") != std::string::npos)
     isMQSSTargetBackend = true;
 
   std::vector<ExecutionResult> results;
