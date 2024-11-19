@@ -13,6 +13,7 @@
 #include "RabbitMQClient.h"
 #include "ServerHelper.h"
 #include <thread>
+#include <iostream>
 
 namespace cudaq::details {
 
@@ -22,16 +23,17 @@ sample_result future::get() {
   bool isMQSSTargetBackend = false;
 
 #ifdef CUDAQ_RESTCLIENT_AVAILABLE
-  mqss::RabbitMQClient rabbitMQClient; 
+  mqss::RabbitMQClient* rabbitMQClient; 
   RestClient client;
   auto serverHelper = registry::get<ServerHelper>(qpuName);
   serverHelper->initialize(serverConfig);
   auto headers = serverHelper->getHeaders();
-
+  std::cout << "server helper "<< serverHelper->name() << std::endl;
   // for adding support for rabbitmq-mqss
-  if (serverHelper->name().find("mqss-hpc") != std::string::npos)
+  if (serverHelper->name().find("mqssHPC") != std::string::npos){
+    rabbitMQClient = new mqss::RabbitMQClient();
     isMQSSTargetBackend = true;
-
+  }
   std::vector<ExecutionResult> results;
   for (auto &id : jobs) {
     cudaq::info("Future retrieving results for {}.", id.first);
@@ -43,7 +45,7 @@ sample_result future::get() {
     nlohmann::json resultResponse;
     // This have to be added to support rabbitmq
     if (isMQSSTargetBackend){
-      std::string response_str = rabbitMQClient.sendMessageWithReply(RABBITMQ_CUDAQ_JOBSTRING_QUEUE,id.first,false);
+      std::string response_str = rabbitMQClient->sendMessageWithReply(RABBITMQ_CUDAQ_JOBSTRING_QUEUE,id.first,false);
       resultResponse = nlohmann::json::parse(response_str);
     }
     else
@@ -54,7 +56,7 @@ sample_result future::get() {
       std::this_thread::sleep_for(polling_interval);
       // This have to be added to support rabbitmq
       if (isMQSSTargetBackend){
-        std::string response_str = rabbitMQClient.sendMessageWithReply(RABBITMQ_CUDAQ_JOBSTRING_QUEUE,id.first,false);
+        std::string response_str = rabbitMQClient->sendMessageWithReply(RABBITMQ_CUDAQ_JOBSTRING_QUEUE,id.first,false);
         resultResponse = nlohmann::json::parse(response_str);
       }
       else
