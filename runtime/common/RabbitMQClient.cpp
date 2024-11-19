@@ -44,8 +44,6 @@
 #include "common/Logger.h"
 #include "RabbitMQClient.h"
 #include "cudaq/utils/cudaq_utils.h"
-#include <cpr/cpr.h>
-#include <zlib.h>
 #include <iostream>
 
 std::string generate_uuid() {
