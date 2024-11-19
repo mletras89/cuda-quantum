@@ -147,7 +147,7 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   RestHeaders headers = generateRequestHeader();
 
   cudaq::info(
-      "Created job payload for MQSS, language is quake, targeting {}",
+      "Created job payload for MQSS via MQP, language is quake, targeting {}",
       machine);
    // return the payload
   return std::make_tuple(baseUrl + "job", headers, messages);
