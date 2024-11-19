@@ -25,8 +25,10 @@ Executor::execute(std::vector<KernelExecution> &codesToExecute) {
   std::vector<details::future::Job> ids;
 
   // for adding support for rabbitmq-mqss
-  if (serverHelper->name().find("mqss-hpc") != std::string::npos) 
+  if (serverHelper->name().find("mqssHPC") != std::string::npos){ 
     isMQSSTargetBackend = true;
+    rabbitMQClient = new mqss::RabbitMQClient();
+  }
 
   for (std::size_t i = 0; auto &job : jobs) {
     cudaq::info("Job (name={}) created, posting to {}", codesToExecute[i].name,
@@ -34,7 +36,7 @@ Executor::execute(std::vector<KernelExecution> &codesToExecute) {
     nlohmann::json response;
     // Post it, get the response
     if (isMQSSTargetBackend){
-      std::string response_str = rabbitMQClient.sendMessageWithReply(RABBITMQ_CUDAQ_JOB_QUEUE,job.dump(),true);
+      std::string response_str = rabbitMQClient->sendMessageWithReply(RABBITMQ_CUDAQ_JOB_QUEUE,job.dump(),true);
       response = nlohmann::json::parse(response_str);
     }
     else
