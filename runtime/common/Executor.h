@@ -24,7 +24,7 @@ protected:
   RestClient client;
 
   /// @brief The RabbitMQ Client used to interact with the MQSS
-  mqss::RabbitMQClient rabbitMQClient;
+  mqss::RabbitMQClient* rabbitMQClient;
 
   /// @brief The ServerHelper, providing system-specific JSON-formatted
   /// job posts and results translation
