@@ -43,6 +43,58 @@
 #include <crow.h>  // Include Crow header file
 #include <unordered_map>
 #include <uuid/uuid.h>  // For generating UUIDs
+#include <regex>
+
+// llvm includes
+#include "llvm/Support/Casting.h"
+#include <llvm/Support/Base64.h>
+#include "llvm/Bitstream/BitstreamReader.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Error.h"
+#include <llvm/Support/SourceMgr.h>
+#include <llvm/AsmParser/Parser.h>
+#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+#include "llvm/ExecutionEngine/Orc/LLJIT.h"
+#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+// MLIR 
+// mlir includes
+#include "mlir/Target/LLVMIR/Import.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/Parser/Parser.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/ImplicitLocOpBuilder.h"
+#include "mlir/Pass/PassManager.h"
+#include "mlir/Transforms/Passes.h"
+#include "mlir/Target/LLVMIR/ModuleTranslation.h"  // For translateModuleToLLVMIR
+#include "mlir/ExecutionEngine/OptUtils.h"
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
+// cudaq includes
+#include "cudaq/Frontend/nvqpp/AttributeNames.h"
+#include "cudaq/Optimizer/Transforms/Passes.h"
+// includes in runtime
+#include "cudaq/qis/execution_manager.h"
+#include "cudaq.h"
+#include "common/Executor.h"
+#include "common/RuntimeMLIR.h"
+#include "common/Logger.h"
+#include "common/JIT.h"
+#include "common/ExecutionContext.h"
+#include "cudaq/spin_op.h"
+#include "cudaq/Optimizer/CodeGen/Pipelines.h"
+#include "cudaq/Optimizer/CodeGen/Passes.h"
+#include "cudaq/Optimizer/Transforms/Passes.h"
+#include "cudaq/algorithm.h"
+
+#define CUDAQ_GEN_PREFIX_NAME "__nvqpp__mlirgen____"
 
 // Define the Job structure to handle the incoming job data
 struct Job {
@@ -62,6 +114,125 @@ std::string generateUUID() {
     char uuidStr[37];            // UUIDs are 36 characters plus null terminator
     uuid_unparse(uuid, uuidStr);  // Convert UUID to string
     return std::string(uuidStr);
+}
+
+std::tuple<mlir::ModuleOp, mlir::MLIRContext *>
+extractMLIRContext(const std::string& circuit){
+  auto contextPtr = cudaq::initializeMLIR();
+  mlir::MLIRContext &context = *contextPtr.get();
+  
+  // Get the quake representation of the kernel
+  auto quakeCode = circuit;
+  auto m_module = mlir::parseSourceString<mlir::ModuleOp>(quakeCode, &context);
+  if (!m_module)
+    throw std::runtime_error("module cannot be parsed");
+  
+  return std::make_tuple(m_module.release(), contextPtr.release());
+}
+
+// Trim leading and trailing whitespace
+std::string trim(const std::string& str){
+    size_t first = str.find_first_not_of(" \t\n\r\f\v"); // Find first non-whitespace
+    if (first == std::string::npos) {
+        return "";  // If no non-whitespace characters, return an empty string
+    }
+    size_t last = str.find_last_not_of(" \t\n\r\f\v");  // Find last non-whitespace
+    return str.substr(first, (last - first + 1));       // Return trimmed substring
+}
+
+std::string getKernelName(const std::string& program){
+  std::regex patternKernel("func\\.func @__nvqpp__mlirgen____([^\\(\\)]+)\\(\\)");
+  std::smatch matches;
+  assert(std::regex_search(program, matches, patternKernel) &&
+         "Error, no kernel function name found on the given Quake program..." );
+  std::string kernelName = matches[1];  // The key inside curly braces starting with __nvqpp__mlirgen____
+  // Find the position of the substring
+  size_t pos = kernelName.find(CUDAQ_GEN_PREFIX_NAME);
+  // If the substring is found, erase it
+  if (pos != std::string::npos) {
+      kernelName.erase(pos, std::string(CUDAQ_GEN_PREFIX_NAME).length());
+  }
+
+  return trim(kernelName);
+}
+
+std::unordered_map<int, int> parseStringToMap(const std::string &input) {
+  std::unordered_map<int, int> resultMap;
+  std::string cleanedInput = input;
+
+  // Remove curly braces '{' and '}'
+  cleanedInput.erase(std::remove(cleanedInput.begin(), cleanedInput.end(), '{'), cleanedInput.end());
+  cleanedInput.erase(std::remove(cleanedInput.begin(), cleanedInput.end(), '}'), cleanedInput.end());
+
+  std::stringstream ss(cleanedInput);
+  std::string keyValuePair;
+
+  // Read each key-value pair
+  while (ss >> keyValuePair) {
+      size_t colonPos = keyValuePair.find(':');
+
+      if (colonPos != std::string::npos) {
+          // Get the key (left of colon) and value (right of colon)
+          int key   = std::stoi(keyValuePair.substr(0, colonPos));
+          int value = std::stoi(keyValuePair.substr(colonPos + 1));
+
+          // Insert into map
+          resultMap[key] = value;
+      }
+  }
+
+  return resultMap;
+}
+
+std::string lowerQuakeCode(const std::string &circuit, const std::string &kernelName){
+  auto [m_module, contextPtr] =
+      extractMLIRContext(circuit);
+
+  mlir::MLIRContext &context = *contextPtr;
+  // Extract the kernel name
+  auto func = m_module.lookupSymbol<mlir::func::FuncOp>(
+      std::string(CUDAQ_GEN_PREFIX_NAME + kernelName));
+
+  auto translation = cudaq::getTranslation("qir-base");
+
+  std::string codeStr;
+  {
+      llvm::raw_string_ostream outStr(codeStr);
+      m_module.getContext()->disableMultithreading();
+      if (failed(translation(m_module, outStr, "", false, false, false)))
+        throw std::runtime_error("Could not successfully translate to qir-base");
+  }
+
+  std::vector<char> decodedBase64Output;
+  // Decode the Base64 string
+  assert (!llvm::decodeBase64(codeStr, decodedBase64Output) &&
+          "Error decoding Base64 string");
+  std::string decodedBase64Kernel = std::string(decodedBase64Output.data(), decodedBase64Output.size());
+  // decode the LLVM byte code to string
+  llvm::LLVMContext contextLLVM;
+  contextLLVM.setOpaquePointers(false);
+  auto memoryBuffer = llvm::MemoryBuffer::getMemBuffer(decodedBase64Kernel);
+
+  llvm::Expected<std::unique_ptr<llvm::Module>> moduleOrErr = llvm::parseBitcodeFile(*memoryBuffer, contextLLVM);
+  std::error_code ec = llvm::errorToErrorCode(moduleOrErr.takeError());
+  assert(!ec && "Compiler::Error parsing bitcode..."); // when debbugin dump: ec.message())
+
+  // Successfully parsed
+  std::unique_ptr<llvm::Module> moduleConverted = std::move(*moduleOrErr);
+
+  auto optPipeline = mlir::makeOptimizingTransformer(
+      /*optLevel=*/3, /*sizeLevel=*/0,
+      /*targetMachine=*/nullptr);
+  if (auto err = optPipeline(moduleConverted.get()))
+    throw std::runtime_error("getQIR Failed to optimize LLVM IR ");
+
+  std::string loweredCode;
+  {
+    llvm::raw_string_ostream os(loweredCode);
+    moduleConverted->print(os, nullptr);
+  }
+
+  return loweredCode;
 }
 
 // Function to get job status and results
@@ -155,25 +326,51 @@ void startServer(int port) {
         std::string program = jobData["program"].s();
 
         // Log job information
-        std::cout << "Posting job with name = " << jobName << ", count = " << jobCount << std::endl;
-        std::cout << "Quake " << program << std::endl;
+/*        std::cout << "Posting job with name = " << jobName << ", count = " << jobCount << std::endl;
+        std::cout << "Quake " <<std::endl << program << std::endl;*/
+        std::string kernelName = getKernelName(program);
+        /*std::cout << "Kernel Name: " << kernelName << std::endl;*/
 
+        std::string qirCode = lowerQuakeCode(program,kernelName);
+        /*std::cout << "QIR: " << std::endl << qirCode << std::endl; */
+
+        std::ofstream outFile(std::string("./tempCircuit.txt"), std::ios::out | std::ios::trunc);
+
+        if (!outFile.is_open())
+          throw std::runtime_error("Failed to open file!");
+
+        outFile << qirCode;
+        outFile.close();
+
+        // Construct the system call to run Python with the input
+        std::string command = std::string("python3 ./SimulateKernelLoweredToLLVM.py -c tempCircuit.txt -o tempResults.txt -s 100");
+        // Execute the command
+        int result = system(command.c_str());
+
+        // Check the result (0 means success)
+        if (result != 0)
+          throw std::runtime_error("Python script execution failed!");
+
+        // now read the results from file
+        std::ifstream file(std::string("./tempResults.txt"));
+
+        // Check if the file was opened successfully
+        if (!file)
+            throw std::runtime_error("File could not be opened!");
+        // Create a stringstream object to read the file content
+        std::stringstream bufferResult;
+        // Read the file content into the stringstream
+        bufferResult << file.rdbuf();
+        // Convert the stringstream into a string
+        std::string resultCircuit = bufferResult.str();
+        file.close();
+        std::remove("./tempCircuit.txt");
+        std::remove("./tempResults.txt");
+        std::cout << "Results:" << std::endl << resultCircuit << std::endl;
         // Generate a new UUID for the job
         std::string newJobId = generateUUID();
-
-        // Simulate kernel function and qubit processing
-        std::string kernelFunctionName = "testQuakeFunction";
-        int numQubitsRequired = 2;
-
-        // Log kernel and qubit details
-        std::cout << "Kernel name = " << kernelFunctionName << std::endl;
-        std::cout << "Requires " << numQubitsRequired << " qubits" << std::endl;
-
         // Simulate results (in the original, this comes from some quantum function)
-        std::unordered_map<int, int> results;
-        results[0] = 499;
-        results[1] = 501;
-
+        std::unordered_map<int, int> results = parseStringToMap(resultCircuit);
         // Store the created job in the global jobs dictionary
         createdJobs[newJobId] = {jobName, results};
 
