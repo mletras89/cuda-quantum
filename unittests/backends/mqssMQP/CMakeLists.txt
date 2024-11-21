@@ -24,9 +24,6 @@ target_link_libraries(test-mqp-mqss
   cudaq-platform-default 
   gtest_main)
 
-configure_file("MQSS-MQP-StartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/MQSS-MQP-StartServerAndTest.sh" @ONLY)
-add_test(NAME mqp-mqss-tests COMMAND bash MQSS-MQP-StartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/)
-
 set(CMAKE_CXX_STANDARD 17)
 
 ### Add Crow headers
@@ -35,7 +32,17 @@ include_directories(${CMAKE_SOURCE_DIR}/tpls/Crow/include)
 add_executable(CrowRestServer crow-REST-server.cpp)
 ## Link with uuid library
 target_link_libraries(CrowRestServer PRIVATE
-			uuid)
+  cudaq-common 
+  cudaq
+  cudaq-builder
+  cudaq-mlir-runtime
+  cudaq-rest-qpu
+  cudaq-spin 
+  #nvqir nvqir-qpp
+  cudaq-platform-default 			
+  uuid)
 
-configure_file("CXX-MQSS-MQP-StartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/CXX-MQSS-MQP-StartServerAndTest.sh" @ONLY)
-add_test(NAME mqp-mqss-cpp-tests COMMAND bash CXX-MQSS-MQP-StartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/)
+configure_file("MQSS-MQP-StartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/MQSS-MQP-StartServerAndTest.sh" @ONLY)
+configure_file("SimulateKernelLoweredToLLVM.py.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/SimulateKernelLoweredToLLVM.py" @ONLY)
+
+add_test(NAME mqp-mqss-cpp-tests COMMAND bash MQSS-MQP-StartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/)
