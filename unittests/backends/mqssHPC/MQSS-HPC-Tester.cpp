@@ -71,7 +71,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   EXPECT_EQ(counts.size(), 2);
 }
 
-/*CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
+CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
@@ -321,7 +321,7 @@ CUDAQ_TEST(MQSSTester, checkObserveAsyncLoadFromFile) {
 
   printf("ENERGY: %lf\n", result.expectation());
   EXPECT_TRUE(isValidExpVal(result.expectation()));
-}*/
+}
 
 int main(int argc, char **argv) {
   std::string home = std::getenv("HOME");
