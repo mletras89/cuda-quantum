@@ -103,42 +103,41 @@ std::string trim(const std::string& str){
 std::string getKernelName(const std::string& program){
   std::regex patternKernel("func\\.func @__nvqpp__mlirgen____([^\\(\\)]+)\\(\\)");
   std::smatch matches;
-  assert(std::regex_search(program, matches, patternKernel) &&
-         "Error, no kernel function name found on the given Quake program..." );
-  std::string kernelName = matches[1];  // The key inside curly braces starting with __nvqpp__mlirgen____
+  if(!std::regex_search(program, matches, patternKernel))
+    throw std::runtime_error("Error, no kernel function name found on the given Quake program...");
+  std::string kernelName = matches[1];
   // Find the position of the substring
   size_t pos = kernelName.find(CUDAQ_GEN_PREFIX_NAME);
   // If the substring is found, erase it
   if (pos != std::string::npos) {
       kernelName.erase(pos, std::string(CUDAQ_GEN_PREFIX_NAME).length());
   }
-
   return trim(kernelName);
 }
 
-std::unordered_map<int, int> parseStringToMap(const std::string &input) {
-  std::unordered_map<int, int> resultMap;
-  std::string cleanedInput = input;
-
-  // Remove curly braces '{' and '}'
-  cleanedInput.erase(std::remove(cleanedInput.begin(), cleanedInput.end(), '{'), cleanedInput.end());
-  cleanedInput.erase(std::remove(cleanedInput.begin(), cleanedInput.end(), '}'), cleanedInput.end());
-
-  std::stringstream ss(cleanedInput);
-  std::string keyValuePair;
-
-  // Read each key-value pair
-  while (ss >> keyValuePair) {
-      size_t colonPos = keyValuePair.find(':');
-
-      if (colonPos != std::string::npos) {
-          // Get the key (left of colon) and value (right of colon)
-          int key   = std::stoi(keyValuePair.substr(0, colonPos));
-          int value = std::stoi(keyValuePair.substr(colonPos + 1));
-
-          // Insert into map
-          resultMap[key] = value;
+std::unordered_map<std::string,std::unordered_map<int, int>> parseStringToMap(const std::string &input) {
+  std::unordered_map<std::string,std::unordered_map<int, int>> resultMap;
+  // Regex to match outer keys and their corresponding { ... } content
+  std::regex outerRegex(R"((\w+)\s*:\s*\{([^}]+)\})");
+  std::smatch outerMatch;
+  std::string::const_iterator searchStart(input.cbegin());
+  while (std::regex_search(searchStart, input.cend(), outerMatch, outerRegex)) {
+      std::string outerKey = outerMatch[1]; // Capture outer key, e.g., "__global__"
+      std::string innerContent = outerMatch[2]; // Capture inner content, e.g., "0:479 1:521"
+      // Parse the inner map
+      std::unordered_map<int, int> innerMap;
+      std::regex innerRegex(R"((\d+)\s*:\s*(\d+))");
+      std::smatch innerMatch;
+      std::string::const_iterator innerStart(innerContent.cbegin());
+      while (std::regex_search(innerStart, innerContent.cend(), innerMatch, innerRegex)) {
+          int key = std::stoi(innerMatch[1]);
+          int value = std::stoi(innerMatch[2]);
+          innerMap[key] = value;
+          innerStart = innerMatch.suffix().first; // Move to the next match
       }
+      // Add the parsed inner map to the result
+      resultMap[outerKey] = innerMap;
+      searchStart = outerMatch.suffix().first; // Move to the next outer match
   }
   return resultMap;
 }
@@ -164,8 +163,9 @@ std::string lowerQuakeCode(const std::string &circuit, const std::string &kernel
 
   std::vector<char> decodedBase64Output;
   // Decode the Base64 string
-  assert (!llvm::decodeBase64(codeStr, decodedBase64Output) &&
-          "Error decoding Base64 string");
+  if(llvm::decodeBase64(codeStr, decodedBase64Output))
+    throw std::runtime_error("Error decoding Base64 string");
+
   std::string decodedBase64Kernel = std::string(decodedBase64Output.data(), decodedBase64Output.size());
   // decode the LLVM byte code to string
   llvm::LLVMContext contextLLVM;
@@ -174,8 +174,8 @@ std::string lowerQuakeCode(const std::string &circuit, const std::string &kernel
 
   llvm::Expected<std::unique_ptr<llvm::Module>> moduleOrErr = llvm::parseBitcodeFile(*memoryBuffer, contextLLVM);
   std::error_code ec = llvm::errorToErrorCode(moduleOrErr.takeError());
-  assert(!ec && "Compiler::Error parsing bitcode..."); // when debbugin dump: ec.message())
-
+  if(ec)
+    throw std::runtime_error("Compiler::Error parsing bitcode..."); // when debbugin dump: ec.message())
   // Successfully parsed
   std::unique_ptr<llvm::Module> moduleConverted = std::move(*moduleOrErr);
 
@@ -299,13 +299,12 @@ nlohmann::json processJob(const std::string& receivedMessage){
   // Generate a new UUID for the job
   std::string newJobId = generate_uuid();
   // Simulate results (in the original, this comes from some quantum function)
-  std::unordered_map<int, int> results = parseStringToMap(resultCircuit);
+  std::unordered_map<std::string,std::unordered_map<int, int>> results = parseStringToMap(resultCircuit);
   // Store the created job in the global jobs dictionary
-  createdJobs[newJobId] = {jobName, results};
- 
+  createdJobs[newJobId] = {jobName, results[std::string("__global__")]};
+  // Return the job ID as a JSON response 
   nlohmann::json resultResponse;
   resultResponse["job"] = newJobId;
- 
   return resultResponse;
 }
 
