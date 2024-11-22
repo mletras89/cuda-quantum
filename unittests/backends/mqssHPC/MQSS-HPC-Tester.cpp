@@ -1,34 +1,4 @@
-/*-------------------------------------------------------------------------
- This code and any associated documentation is provided "as is"
-
- IN NO EVENT SHALL LEIBNIZ-RECHENZENTRUM (LRZ) BE LIABLE TO ANY PARTY FOR
- DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
- OF THE USE OF THIS CODE AND ITS DOCUMENTATION, EVEN IF LEIBNIZ-RECHENZENTRUM
- (LRZ) HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- THE AFOREMENTIONED EXCLUSIONS OF LIABILITY DO NOT APPLY IN CASE OF INTENT
- BY LEIBNIZ-RECHENZENTRUM (LRZ).
-
- LEIBNIZ-RECHENZENTRUM (LRZ), SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
- BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- FOR A PARTICULAR PURPOSE.
-
- THE CODE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, LEIBNIZ-RECHENZENTRUM (LRZ)
- HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
- MODIFICATIONS.
- -------------------------------------------------------------------------
-
-  @author Martin Letras
-  @date   September 2024
-  @version 1.0
-  @ brief
-	Test to verify the connection of CudaQ and the MQSS. The test is mainly
-	based on Quantinuum test provided by Nvidia.
-	When executing the cudaq::sample(kernel), the runtime manager of CudaQ
-	sends a job containing the quake code that has to be processed by the
-	MQSS. Once the job is done, MQSS shall return the results. The
-	cudaq::sample returns the results.
-
- *******************************************************************************
+/*******************************************************************************
  * This source code and the accompanying materials are made available under    *
  * the terms of the Apache License 2.0 which accompanies this distribution.    *
  ******************************************************************************/
