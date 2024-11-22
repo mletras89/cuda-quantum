@@ -1,3 +1,34 @@
+/* This code and any associated documentation is provided "as is"
+
+ IN NO EVENT SHALL LEIBNIZ-RECHENZENTRUM (LRZ) BE LIABLE TO ANY PARTY FOR
+ DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
+ OF THE USE OF THIS CODE AND ITS DOCUMENTATION, EVEN IF LEIBNIZ-RECHENZENTRUM
+ (LRZ) HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ THE AFOREMENTIONED EXCLUSIONS OF LIABILITY DO NOT APPLY IN CASE OF INTENT
+ BY LEIBNIZ-RECHENZENTRUM (LRZ).
+
+ LEIBNIZ-RECHENZENTRUM (LRZ), SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+ BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ FOR A PARTICULAR PURPOSE.
+
+ THE CODE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, LEIBNIZ-RECHENZENTRUM (LRZ)
+ HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+ MODIFICATIONS.
+-------------------------------------------------------------------------
+  @author Martin Letras
+  @date   November 2024
+  @version 1.0
+  @ brief
+  RabbitMQ-Consumer starts a rabbitMQ consumer waiting for queries, login,  
+  send job and check the status.
+  Whe processing the job, the consumer lower the quake code to QIR and the 
+  invokes python scrip to simulate QIR, get results and send them back to 
+  a rabbitMQ client.
+
+*******************************************************************************
+* This source code and the accompanying materials are made available under    * 
+* the terms of the Apache License 2.0 which accompanies this distribution.    * 
+******************************************************************************/
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
@@ -16,52 +47,16 @@
 #include <regex>
 #include <fstream> 
 // llvm includes
-#include "llvm/Support/Casting.h"
 #include <llvm/Support/Base64.h>
-#include "llvm/Bitstream/BitstreamReader.h"
 #include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Error.h"
-#include <llvm/Support/SourceMgr.h>
-#include <llvm/AsmParser/Parser.h>
-#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
-#include "llvm/ExecutionEngine/Orc/LLJIT.h"
-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
 // mlir includes
-#include "mlir/Target/LLVMIR/Import.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/MLIRContext.h"
 #include "mlir/Parser/Parser.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/ImplicitLocOpBuilder.h"
-#include "mlir/Pass/PassManager.h"
-#include "mlir/Transforms/Passes.h"
-#include "mlir/Target/LLVMIR/ModuleTranslation.h"  // For translateModuleToLLVMIR
 #include "mlir/ExecutionEngine/OptUtils.h"
-#include "mlir/ExecutionEngine/ExecutionEngine.h"
 // cudaq includes
-#include "cudaq/Frontend/nvqpp/AttributeNames.h"
-#include "cudaq/Optimizer/Transforms/Passes.h"
-// includes in runtime
-#include "cudaq/qis/execution_manager.h"
-#include "cudaq.h"
-#include "common/Executor.h"
 #include "common/RuntimeMLIR.h"
-#include "common/Logger.h"
 #include "common/JIT.h"
-#include "common/ExecutionContext.h"
-#include "cudaq/spin_op.h"
 #include "cudaq/Optimizer/CodeGen/Pipelines.h"
-#include "cudaq/Optimizer/CodeGen/Passes.h"
-#include "cudaq/Optimizer/Transforms/Passes.h"
-#include "cudaq/algorithm.h"
 
 #define RABBITMQ_SERVER_ADDRESS "127.0.0.1"
 #define RABBITMQ_CUDAQ_PORT     5672
