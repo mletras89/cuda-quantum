@@ -44,55 +44,17 @@
 #include <unordered_map>
 #include <uuid/uuid.h>  // For generating UUIDs
 #include <regex>
-
 // llvm includes
-#include "llvm/Support/Casting.h"
 #include <llvm/Support/Base64.h>
-#include "llvm/Bitstream/BitstreamReader.h"
 #include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Error.h"
-#include <llvm/Support/SourceMgr.h>
-#include <llvm/AsmParser/Parser.h>
-#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
-#include "llvm/ExecutionEngine/Orc/LLJIT.h"
-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
-// MLIR 
 // mlir includes
-#include "mlir/Target/LLVMIR/Import.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/MLIRContext.h"
 #include "mlir/Parser/Parser.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/ImplicitLocOpBuilder.h"
-#include "mlir/Pass/PassManager.h"
-#include "mlir/Transforms/Passes.h"
-#include "mlir/Target/LLVMIR/ModuleTranslation.h"  // For translateModuleToLLVMIR
 #include "mlir/ExecutionEngine/OptUtils.h"
-#include "mlir/ExecutionEngine/ExecutionEngine.h"
 // cudaq includes
-#include "cudaq/Frontend/nvqpp/AttributeNames.h"
-#include "cudaq/Optimizer/Transforms/Passes.h"
-// includes in runtime
-#include "cudaq/qis/execution_manager.h"
-#include "cudaq.h"
-#include "common/Executor.h"
 #include "common/RuntimeMLIR.h"
-#include "common/Logger.h"
 #include "common/JIT.h"
-#include "common/ExecutionContext.h"
-#include "cudaq/spin_op.h"
 #include "cudaq/Optimizer/CodeGen/Pipelines.h"
-#include "cudaq/Optimizer/CodeGen/Passes.h"
-#include "cudaq/Optimizer/Transforms/Passes.h"
-#include "cudaq/algorithm.h"
 
 #define CUDAQ_GEN_PREFIX_NAME "__nvqpp__mlirgen____"
 
