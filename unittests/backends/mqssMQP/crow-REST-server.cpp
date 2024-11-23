@@ -57,7 +57,7 @@
 #include "common/JIT.h"
 #include "cudaq/Optimizer/CodeGen/Pipelines.h"
 
-#define CUDAQ_GEN_PREFIX_NAME "__nvqpp__mlirgen____"
+#define CUDAQ_GEN_PREFIX_NAME "__nvqpp__mlirgen__"
 
 // Define the Job structure to handle the incoming job data
 struct Job {
@@ -104,7 +104,7 @@ std::string trim(const std::string& str){
 }
 
 std::string getKernelName(const std::string& program){
-  std::regex patternKernel("func\\.func @__nvqpp__mlirgen____([^\\(\\)]+)\\(\\)");
+  std::regex patternKernel("@__nvqpp__mlirgen__([^\\(\\)]+)\\(\\)");
   std::smatch matches;
   if(!std::regex_search(program, matches, patternKernel))
     throw std::runtime_error("Error, no kernel function name found on the given Quake program...");
@@ -295,8 +295,8 @@ void startServer(int port) {
         std::string program = jobData["program"].s();
 
         // Log job information
-        /*std::cout << "Posting job with name = " << jobName << ", count = " << jobCount << std::endl;
-        std::cout << "Quake " <<std::endl << program << std::endl;*/
+        /*std::cout << "Posting job with name = " << jobName << ", count = " << jobCount << std::endl;*/
+        //std::cout << "Quake " <<std::endl << program << std::endl;
         std::string kernelName = getKernelName(program);
         //std::cout << "Kernel Name: " << kernelName << std::endl;
 
