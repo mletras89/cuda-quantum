@@ -75,7 +75,7 @@ public:
         baseUrl += "/";
     }
 
-   // Allow overriding IQM Server Url, the compiled program will still work if
+   // Allow overriding MQSS Server Url, the compiled program will still work if
     // architecture matches. This is useful in case we're using the same program
     // against different backends, for example simulated and actually connected
     // to the hardware.
