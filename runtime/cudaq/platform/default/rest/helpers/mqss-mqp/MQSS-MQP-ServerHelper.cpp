@@ -75,6 +75,16 @@ public:
         baseUrl += "/";
     }
 
+   // Allow overriding IQM Server Url, the compiled program will still work if
+    // architecture matches. This is useful in case we're using the same program
+    // against different backends, for example simulated and actually connected
+    // to the hardware.
+    auto envMQSSServerUrl = getenv("MQSS_MQP_SERVER_URL");
+    if (envMQSSServerUrl) 
+      baseUrl = std::string(envMQSSServerUrl);
+    if (!baseUrl.ends_with("/"))
+      baseUrl += "/";
+
     iter = backendConfig.find("credentials");
     if (iter != backendConfig.end())
       userSpecifiedCredentials = iter->second;
