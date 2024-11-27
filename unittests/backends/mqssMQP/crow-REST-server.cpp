@@ -205,25 +205,31 @@ std::string lowerQuakeCode(const std::string &circuit, const std::string &kernel
   return loweredCode;
 }
 
-// Function to get job status and results
+// Function to get job status
 crow::response getJobStatus(const std::string& jobId) {
     // Simulate asynchronous behavior by returning "running" for the first few requests
+    // Check if the job exists
+    if (createdJobs.find(jobId) == createdJobs.end()) 
+        return crow::response(404, "Job not found");
+
     if (countJobGetRequests < 3) {
         countJobGetRequests++;
-        return crow::response(crow::json::wvalue{{"status", "running"}});
+        return crow::response(crow::json::wvalue{{"status", "PENDING"}});
     }
 
     // Reset the request counter after 3 "running" responses
     countJobGetRequests = 0;
+    return crow::response(crow::json::wvalue{{"status", "COMPLETED"}});
+}
 
+// Function to get job results
+crow::response getJob(const std::string& jobId) {
     // Check if the job exists
-    if (createdJobs.find(jobId) == createdJobs.end()) {
+    if (createdJobs.find(jobId) == createdJobs.end()) 
         return crow::response(404, "Job not found");
-    }
 
     // Retrieve the job data (name and counts)
     auto& [name, counts] = createdJobs[jobId];
-
     // Prepare the result data by expanding the counts
     std::vector<int> retData;
     for (const auto& [bits, count] : counts) {
@@ -231,19 +237,15 @@ crow::response getJobStatus(const std::string& jobId) {
             retData.push_back(bits);
         }
     }
-
     // Convert the result data to a string list
     std::vector<std::string> stringResults;
     //crow::json::wvalue stringResults;
     for (int bits : retData) {
         stringResults.push_back(std::to_string(bits));
     }
-
     // Create the final response JSON object
     crow::json::wvalue resultResponse;
-
-    resultResponse["status"] = "completed";
-    resultResponse["results"]["MOCK_SERVER_RESULTS" ] = stringResults;
+    resultResponse["result"]["MOCK_SERVER_RESULTS" ] = stringResults;
     return crow::response(resultResponse);
 }
 
@@ -345,14 +347,20 @@ void startServer(int port) {
 
         // Return the job ID as a JSON response
         crow::json::wvalue result_response;
-        result_response["job"] = newJobId;
+        result_response["uuid"] = newJobId;
         return crow::response(result_response);
     });
 
-   // Define the GET route for retrieving job status and results
-    CROW_ROUTE(app, "/job/<string>").methods(crow::HTTPMethod::GET)
+   // Define the GET route for retrieving job status
+    CROW_ROUTE(app, "/job/<string>/status").methods(crow::HTTPMethod::GET)
     ([](const crow::request& req, std::string jobId) {
         return getJobStatus(jobId);
+    });
+
+   // Define the GET route for retrieving job results
+    CROW_ROUTE(app, "/job/<string>/result").methods(crow::HTTPMethod::GET)
+    ([](const crow::request& req, std::string jobId) {
+        return getJob(jobId);
     });
 
     // Start the server
