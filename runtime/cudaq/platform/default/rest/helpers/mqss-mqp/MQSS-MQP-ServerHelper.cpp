@@ -1,10 +1,34 @@
-/*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
- * All rights reserved.                                                        *
- *                                                                             *
- * This source code and the accompanying materials are made available under    *
- * the terms of the Apache License 2.0 which accompanies this distribution.    *
- ******************************************************************************/
+/*-------------------------------------------------------------------------
+ This code and any associated documentation is provided "as is"
+
+ IN NO EVENT SHALL LEIBNIZ-RECHENZENTRUM (LRZ) BE LIABLE TO ANY PARTY FOR
+ DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
+ OF THE USE OF THIS CODE AND ITS DOCUMENTATION, EVEN IF LEIBNIZ-RECHENZENTRUM
+ (LRZ) HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ THE AFOREMENTIONED EXCLUSIONS OF LIABILITY DO NOT APPLY IN CASE OF INTENT
+ BY LEIBNIZ-RECHENZENTRUM (LRZ).
+
+ LEIBNIZ-RECHENZENTRUM (LRZ), SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+ BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ FOR A PARTICULAR PURPOSE.
+
+ THE CODE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, LEIBNIZ-RECHENZENTRUM (LRZ)
+ HAS NO OBLIGATION TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+ MODIFICATIONS.
+ -------------------------------------------------------------------------
+  @author Martin Letras
+  @date   November 2024
+  @version 1.0
+  @ brief
+  
+  Server helper used to connect CUDAQ runtime to the Munich Quantum Software 
+  Stack (MQSS). The communication is done via REST api to reach the Munich
+  Quantum Portal (MQP).
+
+*******************************************************************************
+* This source code and the accompanying materials are made available under    *
+* the terms of the Apache License 2.0 which accompanies this distribution.    *
+******************************************************************************/
 #include "cudaq.h"
 #include "common/Logger.h"
 #include "common/ServerHelper.h"
@@ -14,6 +38,7 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include "MQSSJobStatus.h"
 
 namespace cudaq {
 
@@ -33,22 +58,9 @@ std::string searchMQSSAPIKey(std::string &key, std::string &refreshKey,
 class MQSSServerHelper : public ServerHelper {
 protected:
   /// @brief The base URL
-  std::string baseUrl = "https://qapi.quantinuum.com/v1/";
-  /// @brief The machine we are targeting
-  std::string machine = "H2-1SC";
-  /// @brief Time string, when the last tokens were retrieved
-  std::string timeStr = "";
-  /// @brief The refresh token
-  std::string refreshKey = "";
-  /// @brief The API token for the remote server
-  std::string apiKey = "";
+  std::string mqpUrl = "https://portal.quantum.lrz.de:4000/";
 
-  std::string userSpecifiedCredentials = "";
-  std::string credentialsPath = "";
-
-  /// @brief MQSS requires the API token be updated every so often,
-  /// using the provided refresh token. This function will do that.
-  void refreshTokens(bool force_refresh = false);
+  std::string token = "6XHDN1U8WIxourN4lGP8OEuu3zDRI5Y1LoxJN6dAT7iftnpBlZ8tZ9pybZ05ipkh";
 
   /// @brief Return the headers required for the REST calls
   RestHeaders generateRequestHeader() const;
@@ -63,16 +75,16 @@ public:
     backendConfig = config;
 
     // Set the machine
-    auto iter = backendConfig.find("machine");
+    /*auto iter = backendConfig.find("machine");
     if (iter != backendConfig.end())
-      machine = iter->second;
+      machine = iter->second;*/
 
     // Set an alternate base URL if provided
-    iter = backendConfig.find("url");
+    auto iter = backendConfig.find("url");
     if (iter != backendConfig.end()) {
-      baseUrl = iter->second;
-      if (!baseUrl.ends_with("/"))
-        baseUrl += "/";
+      mqpUrl = iter->second;
+      if (!mqpUrl.ends_with("/"))
+        mqpUrl += "/";
     }
 
    // Allow overriding MQSS Server Url, the compiled program will still work if
@@ -81,13 +93,13 @@ public:
     // to the hardware.
     auto envMQSSServerUrl = getenv("MQSS_MQP_SERVER_URL");
     if (envMQSSServerUrl) 
-      baseUrl = std::string(envMQSSServerUrl);
-    if (!baseUrl.ends_with("/"))
-      baseUrl += "/";
+      mqpUrl = std::string(envMQSSServerUrl);
+    if (!mqpUrl.ends_with("/"))
+      mqpUrl += "/";
 
-    iter = backendConfig.find("credentials");
+    /*iter = backendConfig.find("credentials");
     if (iter != backendConfig.end())
-      userSpecifiedCredentials = iter->second;
+      userSpecifiedCredentials = iter->second;*/
 
     parseConfigForCommonParams(config);
   }
@@ -99,7 +111,7 @@ public:
   /// @brief Return the job id from the previous job post
   std::string extractJobId(ServerMessage &postResponse) override;
 
-  /// @brief Return the URL for retrieving job results
+  /// @brief Return the URL for retrieving job status
   std::string constructGetJobPath(ServerMessage &postResponse) override;
   std::string constructGetJobPath(std::string &jobId) override;
 
@@ -113,12 +125,11 @@ public:
 
 ServerJobPayload
 MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
-  
   std::vector<ServerMessage> messages;
   for (auto &circuitCode : circuitCodes) {
     // Construct the job itself
     ServerMessage j;
-    j["machine"] = machine;
+    //j["machine"] = machine;
     j["count"] = shots;  
     j["name"] = circuitCode.name;
     j["circuitFile"] = "circuitFile";
@@ -147,55 +158,50 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     j["submitTime"] = timeStream.str();  
     messages.push_back(j);
   }
-
-  // Get the tokens we need
-  credentialsPath =
-      searchMQSSAPIKey(apiKey, refreshKey, timeStr, userSpecifiedCredentials);
-  refreshTokens();
-
   // Get the headers
   RestHeaders headers = generateRequestHeader();
-
-  cudaq::info(
-      "Created job payload for MQSS via MQP, language is quake, targeting {}",
-      machine);
-   // return the payload
-  return std::make_tuple(baseUrl + "job", headers, messages);
+  // Return the payload
+  return std::make_tuple(mqpUrl + "job", headers, messages);
 }
 
 std::string MQSSServerHelper::extractJobId(ServerMessage &postResponse) {
-  return postResponse["job"].get<std::string>();
+  return postResponse["uuid"].get<std::string>();
 }
 
 std::string
 MQSSServerHelper::constructGetJobPath(ServerMessage &postResponse) {
-  return baseUrl + "job/" + extractJobId(postResponse);
+  // In order to work with the MQSS via MQP, the GetJobPath is used to get 
+  // the status of a job
+  return mqpUrl + "job/" + extractJobId(postResponse)+"/status";
 }
 
 std::string MQSSServerHelper::constructGetJobPath(std::string &jobId) {
-  return baseUrl + "job/" + jobId;
+  // In order to work with the MQSS via MQP, the GetJobPath is used to get 
+  // the status of a job
+  return mqpUrl + "job/" + jobId+"/status";
 }
 
 bool MQSSServerHelper::jobIsDone(ServerMessage &getJobResponse) {
   auto status = getJobResponse["status"].get<std::string>();
-  if (status == "failed") {
-    std::string msg = "";
-    if (getJobResponse.count("error"))
-      msg = getJobResponse["error"]["text"].get<std::string>();
-    throw std::runtime_error("Job failed to execute msg = [" + msg + "]");
-  }
+  if (status == cudaq::mqss::jobStatusToString(cudaq::mqss::JobStatus::FAILED))
+    throw std::runtime_error("MQSS::MQP job failed to execute!");
 
-  return status == "completed";
+  return status == cudaq::mqss::jobStatusToString(cudaq::mqss::JobStatus::COMPLETED);
 }
 
 cudaq::sample_result
 MQSSServerHelper::processResults(ServerMessage &postJobResponse,
                                        std::string &jobId) {
+  // MQP has a separeted request for asking results, this only will work if it is
+  // fired after we are 100% sure, the job is completed
+  RestClient client;
+  auto headers = generateRequestHeader();
+  auto resultResponse = client.get(mqpUrl + "job/" +jobId+"/result", "", headers);
   // Results come back as a map of vectors. Each map key corresponds to a qubit
   // and its corresponding vector holds the measurement results in each shot:
   //      { "results" : { "r0" : ["0", "0", ...],
   //                      "r1" : ["1", "0", ...]  } }
-  auto results = postJobResponse["results"];
+  auto results = resultResponse["result"];
 
   cudaq::info("Results message: {}", results.dump());
 
@@ -294,63 +300,13 @@ MQSSServerHelper::processResults(ServerMessage &postJobResponse,
 
 std::map<std::string, std::string>
 MQSSServerHelper::generateRequestHeader() const {
-  std::string apiKey, refreshKey, timeStr;
-  searchMQSSAPIKey(apiKey, refreshKey, timeStr, userSpecifiedCredentials);
   std::map<std::string, std::string> headers{
-      {"Authorization", apiKey},
-      {"Content-Type", "application/json"},
-      {"Connection", "keep-alive"},
-      {"Accept", "*/*"}};
+      {"Authorization", "Bearer "+token}};
   return headers;
 }
 
 RestHeaders MQSSServerHelper::getHeaders() {
   return generateRequestHeader();
-}
-
-/// Refresh the api key and refresh-token
-void MQSSServerHelper::refreshTokens(bool force_refresh) {
-  std::mutex m;
-  std::lock_guard<std::mutex> l(m);
-  RestClient client;
-  auto now = std::chrono::high_resolution_clock::now();
-
-  // If the time string is empty, let's add it
-  if (timeStr.empty()) {
-    timeStr = std::to_string(now.time_since_epoch().count());
-    std::ofstream out(credentialsPath);
-    out << "key:" << apiKey << '\n';
-    out << "refresh:" << refreshKey << '\n';
-    out << "time:" << timeStr << '\n';
-  }
-
-  // We first check how much time has elapsed since the
-  // existing refresh key was created
-  std::int64_t timeAsLong = std::stol(timeStr);
-  std::chrono::high_resolution_clock::duration d(timeAsLong);
-  std::chrono::high_resolution_clock::time_point oldTime(d);
-  auto secondsDuration =
-      1e-3 *
-      std::chrono::duration_cast<std::chrono::milliseconds>(now - oldTime);
-
-  // If we are getting close to an 30 min, then we will refresh
-  bool needsRefresh = secondsDuration.count() * (1. / 1800.) > .85;
-  if (needsRefresh || force_refresh) {
-    cudaq::info("Refreshing id-token");
-    std::stringstream ss;
-    ss << "\"refresh-token\":\"" << refreshKey << "\"";
-    auto headers = generateRequestHeader();
-    nlohmann::json j;
-    j["refresh-token"] = refreshKey;
-    auto response_json = client.post(baseUrl, "login", j, headers);
-    apiKey = response_json["id-token"].get<std::string>();
-    refreshKey = response_json["refresh-token"].get<std::string>();
-    std::ofstream out(credentialsPath);
-    out << "key:" << apiKey << '\n';
-    out << "refresh:" << refreshKey << '\n';
-    out << "time:" << now.time_since_epoch().count() << '\n';
-    timeStr = std::to_string(now.time_since_epoch().count());
-  }
 }
 
 void findMQSSApiKeyInFile(std::string &apiKey, const std::string &path,
@@ -409,7 +365,6 @@ std::string searchMQSSAPIKey(std::string &key, std::string &refreshKey,
   }
   return hwConfig;
 }
-
 } // namespace cudaq
 
 CUDAQ_REGISTER_TYPE(cudaq::ServerHelper, cudaq::MQSSServerHelper,
