@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -60,7 +60,7 @@ installed_backends=`\
     done`
 
 # remote_rest targets are automatically filtered, 
-# so is execution on the photonics backend
+# so is execution on the photonics backend and the stim backend
 # This will test all NVIDIA-derivative targets in the legacy mode,
 # i.e., nvidia-fp64, nvidia-mgpu, nvidia-mqpu, etc., are treated as standalone targets.
 available_backends=`\
@@ -74,11 +74,16 @@ available_backends=`\
         if [[ $file == *"opt-test.yml" ]]; then
           continue
         fi
+        if grep -q "nvqir-simulation-backend: stim" $file ; then 
+          continue
+        fi 
         platform=$(cat $file | grep "platform-qpu:")
         qpu=${platform##* }
         requirements=$(cat $file | grep "gpu-requirements:")
         gpus=${requirements##* }
-        if [ "${qpu}" != "remote_rest" ] && [ "${qpu}" != "orca" ] && [ "${qpu}" != "NvcfSimulatorQPU" ] \
+        if [ "${qpu}" != "remote_rest" ] && [ "${qpu}" != "NvcfSimulatorQPU" ] \
+        && [ "${qpu}" != "fermioniq" ] && [ "${qpu}" != "orca" ] \
+        && [ "${qpu}" != "pasqal" ] && [ "${qpu}" != "quera" ] \
         && ($gpu_available || [ -z "$gpus" ] || [ "${gpus,,}" == "false" ]); then \
             basename $file | cut -d "." -f 1; \
         fi; \
@@ -121,10 +126,10 @@ fi
 tensornet_backend_skipped_tests=(\
     examples/cpp/other/builder/vqe_h2_builder.cpp \
     examples/cpp/other/builder/qaoa_maxcut_builder.cpp \
-    examples/cpp/algorithms/vqe_h2.cpp \
-    examples/cpp/algorithms/qaoa_maxcut.cpp \
+    applications/cpp/vqe_h2.cpp \
+    applications/cpp/qaoa_maxcut.cpp \
     examples/cpp/other/builder/builder.cpp \
-    examples/cpp/algorithms/amplitude_estimation.cpp)
+    applications/cpp/amplitude_estimation.cpp)
 
 echo "============================="
 echo "==        C++ Tests        =="
@@ -132,7 +137,7 @@ echo "============================="
 
 # Note: piping the `find` results through `sort` guarantees repeatable ordering.
 tmpFile=$(mktemp)
-for ex in `find examples/ -name '*.cpp' | sort`;
+for ex in `find examples/ applications/ targets/ -name '*.cpp' | sort`;
 do
     filename=$(basename -- "$ex")
     filename="${filename%.*}"
@@ -146,9 +151,22 @@ do
     if [ -n "$intended_target" ]; then
         echo "Intended for execution on $intended_target backend."
     fi
+    use_library_mode=`sed -e '/^$/,$d' $ex | grep -oP '^//\s*nvq++.+-library-mode'`
+    if [ -n "$use_library_mode" ]; then
+        nvqpp_extra_options="--library-mode"
+    fi
 
     for t in $requested_backends
     do
+        # Skipping dynamics examples if target is not dynamics and ex is dynamics
+        # or gpu is unavailable
+        if { [ "$t" != "dynamics" ] && [[ "$ex" == *"dynamics"* ]]; } || { [ "$t" == "dynamics" ] && [[ "$ex" != *"dynamics"* ]]; }; then
+            let "skipped+=1"
+            echo "Skipping $t target for $ex.";
+            echo ":white_flag: $filename: Not intended for this target. Test skipped." >> "${tmpFile}_$(echo $t | tr - _)"
+            continue
+        fi
+
         if [ "$t" == "default" ]; then target_flag=""
         else target_flag="--target $t"
         fi
@@ -178,7 +196,7 @@ do
             # Skipped long-running tests (variational optimization loops) for the "remote-mqpu" target to keep CI runtime managable.
             # A simplified test for these use cases is included in the 'test/Remote-Sim/' test suite. 
             # Skipped tests that require passing kernel callables to entry-point kernels for the "remote-mqpu" target.
-            if [[ "$ex" == *"vqe_h2"* || "$ex" == *"qaoa_maxcut"* || "$ex" == *"gradients"* || "$ex" == *"grover"* || "$ex" == *"multi_controlled_operations"* || "$ex" == *"phase_estimation"* || "$ex" == *"trotter_kernel"* || "$ex" == *"builder.cpp"* ]];
+            if [[ "$ex" == *"vqe_h2"* || "$ex" == *"qaoa_maxcut"* || "$ex" == *"gradients"* || "$ex" == *"grover"* || "$ex" == *"multi_controlled_operations"* || "$ex" == *"phase_estimation"* || "$ex" == *"trotter_kernel_mode"* || "$ex" == *"builder.cpp"* ]];
             then
                 let "skipped+=1"
                 echo "Skipping $t target.";
@@ -201,16 +219,17 @@ do
         fi
 
         echo "Testing on $t target..."
-        if [ "$t" == "nvidia" ]; then
-            # For the unified 'nvidia' target, we validate all target options as well.
-            # Note: this overlaps some legacy standalone targets (e.g., nvidia-mqpu, nvidia-mgpu, etc.),
-            # but we want to make sure all supported configurations in the unified 'nvidia' target are validated.
-            declare -a optionArray=("fp32" "fp64" "fp32,mqpu" "fp64,mqpu" "fp32,mgpu" "fp64,mgpu")
-            arraylength=${#optionArray[@]}
-            for (( i=0; i<${arraylength}; i++ ));
-            do
-                echo "  Testing nvidia target option: ${optionArray[$i]}"
-                nvq++ $ex $target_flag --target-option "${optionArray[$i]}"
+        
+        # All target options to test for targets that support multiple configurations.
+        declare -A target_options=(
+            [nvidia]="fp32 fp64 fp32,mqpu fp64,mqpu fp32,mgpu fp64,mgpu"
+            [tensornet]="fp32 fp64"
+            [tensornet-mps]="fp32 fp64"
+        )
+        if [[ -n "${target_options[$t]}" ]]; then
+            for opt in ${target_options[$t]}; do
+                echo "  Testing $t target option: ${opt}"
+                nvq++ $nvqpp_extra_options $ex $target_flag --target-option "${opt}"
                 if [ ! $? -eq 0 ]; then
                     let "failed+=1"
                     echo "  :x: Compilation failed for $filename." >> "${tmpFile}_$(echo $t | tr - _)"
@@ -231,7 +250,7 @@ do
                 rm a.out /tmp/cudaq_validation.out &> /dev/null
             done
         else
-            nvq++ $ex $target_flag 
+            nvq++ $nvqpp_extra_options $ex $target_flag
             if [ ! $? -eq 0 ]; then
                 let "failed+=1"
                 echo ":x: Compilation failed for $filename." >> "${tmpFile}_$(echo $t | tr - _)"
@@ -262,17 +281,23 @@ echo "============================="
 # Note: some of the tests do their own "!pip install ..." during the test, and
 # for that to work correctly on the first time, the user site directory (e.g.
 # ~/.local/lib/python3.10/site-packages) must already exist, so create it here.
-mkdir -p $(python3 -m site --user-site)
+if [ -x "$(command -v python3)" ]; then 
+    mkdir -p $(python3 -m site --user-site)
+fi
+
+# Long-running dynamics examples
+dynamics_backend_skipped_examples=(\
+    examples/python/dynamics/transmon_resonator.py  \
+    examples/python/dynamics/silicon_spin_qubit.py)
 
 # Note divisive_clustering_src is not currently in the Published container under
 # the "examples" folder, but the Publishing workflow moves all examples from
-# docs/sphinx/examples into the examples directory for the purposes of the
-# container validation. The divisive_clustering_src Python files are used by the
-# Divisive_clustering.ipynb notebook, so they are tested elsewhere and should be
-# excluded from this test. 
-# Same with afqmc.
+# docs/sphinx/examples, docs/sphinx/targets into the examples directory for the
+# purposes of the container validation. The divisive_clustering_src Python
+# files are used by the Divisive_clustering.ipynb notebook, so they are tested
+# elsewhere and should be excluded from this test.
 # Note: piping the `find` results through `sort` guarantees repeatable ordering.
-for ex in `find examples/ -name '*.py' -not -path '*/divisive_clustering_src/*' -not -path '*/afqmc_src/*' | sort`;
+for ex in `find examples/ targets/ -name '*.py' | sort`;
 do 
     filename=$(basename -- "$ex")
     filename="${filename%.*}"
@@ -285,6 +310,14 @@ do
     for t in $explicit_targets; do
         if [ -z "$(echo $requested_backends | grep $t)" ]; then 
             echo "Explicitly set target $t not available."
+            skip_example=true
+        elif [ "$t" == "quera" ] || [ "$t" == "braket" ] ; then 
+            # Skipped because GitHub does not have the necessary authentication token 
+            # to submit a (paid) job to Amazon Braket (includes QuEra).
+            echo "Explicitly set target braket or quera; skipping validation due to paid submission."
+            skip_example=true
+        elif [[ "$t" == "dynamics" ]] && [[ " ${dynamics_backend_skipped_examples[*]} " =~ " $ex " ]]; then
+            echo "Skipping due to long run time."
             skip_example=true
         fi
     done
@@ -309,7 +342,7 @@ do
     echo "============================="
 done
 
-if [ -n "$(find $(pwd) -name '*.ipynb')" ]; then
+if [ -n "$(find examples/ applications/ -name '*.ipynb')" ]; then
     echo "Validating notebooks:"
     export OMP_NUM_THREADS=8 
     echo "$available_backends" | python3 notebook_validation.py
@@ -324,6 +357,30 @@ else
     let "skipped+=1"
     echo "Skipped notebook validation.";
     echo ":white_flag: Notebooks validation skipped." >> "${tmpFile}"
+fi
+
+# Python snippet validation 
+if [ -d "snippets/" ];
+then
+    # Skip NVQC and multi-GPU snippets.
+    for ex in `find snippets/ -name '*.py' -not -path '*/nvqc/*' -not -path '*/multi_gpu_workflows/*' | sort`;
+    do 
+        filename=$(basename -- "$ex")
+        filename="${filename%.*}"
+        echo "Testing $filename:"
+        echo "Source: $ex"
+        let "samples+=1"
+        python3 $ex 1> /dev/null
+        status=$?
+        echo "Exited with code $status"
+        if [ "$status" -eq "0" ]; then 
+            let "passed+=1"
+            echo ":white_check_mark: Successfully ran $filename." >> "${tmpFile}"
+        else
+            let "failed+=1"
+            echo ":x: Failed to run $filename." >> "${tmpFile}"
+        fi 
+    done
 fi
 
 if [ -f "$GITHUB_STEP_SUMMARY" ]; 

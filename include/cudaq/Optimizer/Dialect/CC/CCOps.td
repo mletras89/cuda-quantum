@@ -1,5 +1,5 @@
 /********************************************************** -*- tablegen -*- ***
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -10,20 +10,23 @@
 #define CUDAQ_OPTIMIZER_DIALECT_CC_OPS
 
 include "mlir/Interfaces/InferTypeOpInterface.td"
+include "mlir/IR/SymbolInterfaces.td"
 include "cudaq/Optimizer/Dialect/Common/Traits.td"
 include "cudaq/Optimizer/Dialect/CC/CCDialect.td"
 include "cudaq/Optimizer/Dialect/CC/CCInterfaces.td"
 include "cudaq/Optimizer/Dialect/CC/CCTypes.td"
 include "cudaq/Optimizer/Dialect/Quake/QuakeTypes.td"
 
-def AnyPointerType : Type<CPred<"$_self.isa<mlir::LLVM::LLVMPointerType,"
-                          "cudaq::cc::PointerType>()">, "any pointer type">;
+def AnyPointerType : Type<CPred<"isa<mlir::LLVM::LLVMPointerType,"
+                          "cudaq::cc::PointerType>($_self)">,
+                          "any pointer type">;
 
-def AnyCallableType : Type<CPred<"$_self.isa<cudaq::cc::CallableType, "
-                          "mlir::FunctionType>()">, "any callable type">;
+def AnyCallableType : Type<CPred<"isa<cudaq::cc::CallableType, "
+                          "mlir::FunctionType>($_self)">, "any callable type">;
 
-def AnyAggregateType : Type<CPred<"$_self.isa<cudaq::cc::StructType, "
-                            "cudaq::cc::ArrayType>()">, "any aggregate type">;
+def AnyAggregateType : Type<CPred<"isa<cudaq::cc::StructType, "
+                            "cudaq::cc::ArrayType, mlir::ComplexType>($_self)">,
+                            "any aggregate type">;
 
 //===----------------------------------------------------------------------===//
 // Base operation definition.
@@ -392,6 +395,7 @@ def cc_IfOp : CCOp<"if",
 
   let hasCustomAssemblyFormat = 1;
   let hasVerifier = 1;
+  let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
     using RegionBuilderFn = llvm::function_ref<void(mlir::OpBuilder &,
@@ -823,7 +827,7 @@ def cc_AllocaOp : CCOp<"alloca", [
 def cc_LoadOp : CCOp<"load",
     [TypesMatchWith<"result type matches element type of pointer value",
         "ptrvalue", "result",
-        "$_self.cast<cudaq::cc::PointerType>().getElementType()">]> {
+        "cast<cudaq::cc::PointerType>($_self).getElementType()">]> {
   let summary = "Load a value from a pointer into a virtual register.";
   let description = [{
     A LoadOp is used to load a value from a memory location, specified by a
@@ -848,7 +852,7 @@ def cc_LoadOp : CCOp<"load",
 def cc_StoreOp : CCOp<"store",
     [TypesMatchWith<"type of value matches element type of pointer",
         "ptrvalue", "value",
-        "$_self.cast<cudaq::cc::PointerType>().getElementType()">]> {
+        "cast<cudaq::cc::PointerType>($_self).getElementType()">]> {
   let summary = "Store a virtual register value to a memory location.";
   let description = [{
     A StoreOp is used to store the value from a virtual register to a memory
@@ -911,19 +915,35 @@ def cc_GlobalOp : CCOp<"global", [IsolatedFromAbove, Symbol]> {
 
   let arguments = (ins
     TypeAttr:$global_type,
-    StrAttr:$sym_name,
+    SymbolNameAttr:$sym_name,
     OptionalAttr<AnyAttr>:$value,
+    OptionalAttr<StrAttr>:$sym_visibility,
     UnitAttr:$constant,
     UnitAttr:$external
   );
 
   let hasCustomAssemblyFormat = 1;
 
+  let builders = [
+    OpBuilder<(ins
+      "mlir::Type":$type, "mlir::StringRef":$name,
+      "mlir::Attribute":$value, "bool":$constant, "bool":$external), [{
+        return build($_builder, $_state, type, name, value,
+                     mlir::StringAttr{}, constant, external);
+      }]
+    >];
+
   let extraClassDeclaration = [{
     cudaq::cc::PointerType getType() {
       auto globalTy = getGlobalType();
       return cudaq::cc::PointerType::get(globalTy);
     }
+
+    //===------------------------------------------------------------------===//
+    // SymbolOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    bool isDeclaration() { return getExternal(); }
   }];
 }
 
@@ -991,7 +1011,7 @@ def cc_InsertValueOp : CCOp<"insert_value", [Pure]> {
     Example:
 
     ```mlir
-      %s = cc.insert_value %i16, %r[1, 0] :
+      %s = cc.insert_value %r[1, 0], %i16 :
            (!cc.struct<{i32, !cc.struct<{i16, f32}>}>, i16) ->
            !cc.struct<{i32, !cc.struct<{i16, f32}>}>
     ```
@@ -1005,9 +1025,11 @@ def cc_InsertValueOp : CCOp<"insert_value", [Pure]> {
   let results = (outs AnyAggregateType);
 
   let assemblyFormat = [{
-    $value `,` $container `` $position `:` functional-type(operands, results)
+    $container `` $position `,` $value `:` functional-type(operands, results)
       attr-dict
   }];
+
+  let hasVerifier = 1;
 
   let builders = [
     OpBuilder<(ins "mlir::Type":$resultType, "mlir::Value":$aggregate,
@@ -1016,6 +1038,10 @@ def cc_InsertValueOp : CCOp<"insert_value", [Pure]> {
                    mlir::ArrayRef<std::int64_t>{index});
     }]>
   ];
+
+  let extraClassDeclaration = [{
+    std::size_t getNumIndices() { return getPosition().size(); }
+  }];
 }
 
 def cc_ComputePtrOp : CCOp<"compute_ptr", [Pure]> {
@@ -1068,6 +1094,8 @@ def cc_ComputePtrOp : CCOp<"compute_ptr", [Pure]> {
     bool llvmNormalForm();
 
     std::optional<std::int32_t> getConstantIndex(std::size_t arg);
+
+    std::size_t getNumIndices() { return getRawConstantIndices().size(); }
   }];
 }
 
@@ -1439,6 +1467,49 @@ def cc_CallCallableOp : CCOp<"call_callable", [CallOpInterface]> {
   }];
 }
 
+def cc_CallIndirectCallableOp :
+    CCOp<"call_indirect_callable", [CallOpInterface]> {
+  let summary = "Call a C++ callable, unresolved, at run-time.";
+  let description = [{
+    This effectively connects a call from one kernel to another kernel, which
+    would have been done at link-time in host code, at run-time on the device
+    side. This allows calls between kernels defined in separate compilation
+    units. The definitions of these caller/callee functions are not both present
+    at compile-time, so they are exposed to the CUDAQ runtime for stitching or
+    LTO at JIT compile time.
+  }];
+
+  let arguments = (ins
+    cc_IndirectCallableType:$callee,
+    Variadic<AnyType>:$args
+  );
+  let results = (outs Variadic<AnyType>:$results);
+  let hasVerifier = 1;
+  let hasCanonicalizer = 1;
+
+  let assemblyFormat = [{
+    $callee (`,` $args^)? `:` functional-type(operands, results) attr-dict
+  }];
+
+  let extraClassDeclaration = [{
+    /// Get the argument operands to the called function.
+    operand_range getArgOperands() {
+      return {arg_operand_begin(), arg_operand_end()};
+    }
+
+    operand_iterator arg_operand_begin() { return ++operand_begin(); }
+    operand_iterator arg_operand_end() { return operand_end(); }
+
+    /// Return the callee of this operation.
+    mlir::CallInterfaceCallable getCallableForCallee() { return getCallee(); }
+
+    mlir::FunctionType getFunctionType() {
+      return mlir::FunctionType::get(getContext(), getOperands().getType(),
+        getResults().getTypes());
+    }
+  }];
+}
+
 def cc_InstantiateCallableOp : CCOp<"instantiate_callable", [Pure]> {
   let summary = "Construction of a callable object.";
   let description = [{
@@ -1583,6 +1654,43 @@ def cc_CallableClosureOp : CCOp<"callable_closure", [Pure]> {
 
   let assemblyFormat = [{
     $callable `:` functional-type(operands, results) attr-dict
+  }];
+}
+
+def cc_VarargCallOp :
+    CCOp<"call_vararg", [CallOpInterface, SymbolUserOpInterface]> {
+  let summary = "Create a call to an llvm.func with variadic arguments.";
+  let description = [{
+    This operation lets us create a call to an LLVMIR FuncOp with variadic
+    arguments without the restriction that all the arguments have to be
+    converted to LLVMIR types first. These conversions are just code bloat and
+    make the code harder to read.
+  }];
+
+  let arguments = (ins
+    FlatSymbolRefAttr:$callee,
+    Variadic<AnyType>:$args
+  );
+  let results = (outs Variadic<AnyType>);
+
+  let assemblyFormat = [{
+    $callee `(` $args `)` `:` functional-type(operands, results) attr-dict
+  }];
+
+  let extraClassDeclaration = [{
+    operand_range getArgOperands() {
+      return {arg_operand_begin(), arg_operand_end()};
+    }
+
+    operand_iterator arg_operand_begin() { return operand_begin(); }
+    operand_iterator arg_operand_end() { return operand_end(); }
+
+    /// Return the callee of this operation.
+    mlir::CallInterfaceCallable getCallableForCallee() {
+      return getCalleeAttr();
+    }
+
+    mlir::LogicalResult verifySymbolUses(mlir::SymbolTableCollection &);
   }];
 }
 

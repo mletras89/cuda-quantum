@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -8,9 +8,11 @@
 
 #include "cudaq/Optimizer/CodeGen/IQMJsonEmitter.h"
 #include "cudaq/Optimizer/CodeGen/OpenQASMEmitter.h"
+#include "cudaq/Optimizer/CodeGen/OptUtils.h"
 #include "cudaq/Optimizer/CodeGen/Pipelines.h"
 #include "cudaq/Optimizer/Dialect/CC/CCDialect.h"
 #include "cudaq/Optimizer/Dialect/Quake/QuakeDialect.h"
+#include "cudaq/Optimizer/InitAllDialects.h"
 #include "cudaq/Support/Version.h"
 #include "cudaq/Todo.h"
 #include "llvm/IR/Module.h"
@@ -23,12 +25,8 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
-#include "mlir/ExecutionEngine/OptUtils.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Verifier.h"
-#include "mlir/InitAllDialects.h"
-#include "mlir/InitAllPasses.h"
-#include "mlir/InitAllTranslations.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
@@ -95,14 +93,13 @@ int main(int argc, char **argv) {
   registerMLIRContextCLOptions();
   registerPassManagerCLOptions();
   registerTranslationCLOptions();
-  registerAllPasses();
 
   llvm::cl::ParseCommandLineOptions(argc, argv,
                                     "quake mlir to llvm ir compiler\n");
 
   DialectRegistry registry;
   registry.insert<cudaq::cc::CCDialect, quake::QuakeDialect>();
-  registerAllDialects(registry);
+  cudaq::registerAllDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
 
@@ -210,8 +207,9 @@ int main(int argc, char **argv) {
   ExecutionEngine::setupTargetTriple(llvmModule.get());
 
   // Optionally run an optimization pipeline over the llvm module.
-  auto optPipeline = makeOptimizingTransformer(optLevel, sizeLevel,
-                                               /*targetMachine=*/nullptr);
+  auto optPipeline =
+      cudaq::makeOptimizingTransformer(optLevel, sizeLevel,
+                                       /*targetMachine=*/nullptr);
   if (auto err = optPipeline(llvmModule.get())) {
     llvm::errs() << "Failed to optimize LLVM IR " << err << '\n';
     std::exit(1);

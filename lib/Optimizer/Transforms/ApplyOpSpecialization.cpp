@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -13,10 +13,9 @@
 #include "cudaq/Optimizer/Transforms/Passes.h"
 #include "cudaq/Todo.h"
 #include "llvm/Support/Debug.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
-#include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
 
 #define DEBUG_TYPE "apply-op-specialization"
@@ -204,13 +203,13 @@ public:
   void runOnOperation() override {
     ApplyOpAnalysis analysis(getOperation());
     const auto &applyVariants = analysis.getAnalysisInfo();
-    step1(applyVariants);
-    step2();
+    if (succeeded(step1(applyVariants)))
+      step2();
   }
 
   /// Step 1. Instantiate all the implied variants of functions from all
   /// quake.apply operations that were found.
-  void step1(const ApplyOpAnalysisInfo &applyVariants) {
+  [[nodiscard]] LogicalResult step1(const ApplyOpAnalysisInfo &applyVariants) {
     ModuleOp module = getOperation();
 
     // Loop over all the globals in the module.
@@ -228,11 +227,15 @@ public:
         createControlVariantOf(func);
       if (variant.needsAdjointVariant) {
         auto fnName = func.getName().str();
-        createAdjointVariantOf(func, getAdjVariantFunctionName(fnName));
+        if (failed(createAdjointVariantOf(func,
+                                          getAdjVariantFunctionName(fnName))))
+          return failure();
       }
       if (variant.needsAdjointControlVariant)
-        createAdjointControlVariantOf(func);
+        if (failed(createAdjointControlVariantOf(func)))
+          return failure();
     }
+    return success();
   }
 
   /// Look for quake.compute_action operations or quake.apply triple patterns in
@@ -305,18 +308,21 @@ public:
         // This is a quantum op. It should be updated with an additional control
         // argument, `newCond`.
         auto arrAttr = op->getAttr(segmentSizes).cast<DenseI32ArrayAttr>();
+        SmallVector<std::int32_t> arrRef{arrAttr.asArrayRef().begin(),
+                                         arrAttr.asArrayRef().end()};
         SmallVector<Value> operands(op->getOperands().begin(),
                                     op->getOperands().begin() + arrAttr[0]);
         operands.push_back(newCond);
         operands.append(op->getOperands().begin() + arrAttr[0],
                         op->getOperands().end());
-        auto newArrAttr = DenseI32ArrayAttr::get(
-            ctx, {arrAttr[0], arrAttr[1] + 1, arrAttr[2]});
+        ++arrRef[1];
+        auto newArrAttr = DenseI32ArrayAttr::get(ctx, arrRef);
         NamedAttrList attrs(op->getAttrs());
         attrs.set(segmentSizes, newArrAttr);
         OperationState res(op->getLoc(), op->getName().getStringRef(), operands,
                            op->getResultTypes(), attrs);
-        builder.create(res); // Quake quantum gates have no results
+        // FIXME: Quake quantum gates do have results.
+        builder.create(res);
         op->erase();
       } else if (auto apply = dyn_cast<quake::ApplyOp>(op)) {
         // If op is an apply and in the set `controlNotNeeded`, then skip it.
@@ -337,23 +343,22 @@ public:
 
   /// The adjoint variant of the function is the "reverse" computation. We want
   /// to reverse the flow graph so the gates appear "upside down".
-  func::FuncOp createAdjointVariantOf(func::FuncOp func,
-                                      std::string &&funcName) {
+  [[nodiscard]] LogicalResult createAdjointVariantOf(func::FuncOp func,
+                                                     std::string &&funcName) {
     ModuleOp module = getOperation();
     auto loc = func.getLoc();
     auto &funcBody = func.getBody();
 
     // Check our restrictions.
     if (regionHasUnstructuredControlFlow(funcBody)) {
-      emitError(loc,
-                "cannot make adjoint of kernel with unstructured control flow");
-      signalPassFailure();
-      return {};
+      LLVM_DEBUG(
+          llvm::dbgs()
+          << "cannot make adjoint of kernel: unstructured control flow\n");
+      return failure();
     }
     if (cudaq::opt::hasCallOp(func)) {
-      emitError(loc, "cannot make adjoint of kernel with calls");
-      signalPassFailure();
-      return {};
+      LLVM_DEBUG(llvm::dbgs() << "cannot make adjoint of kernel with calls\n");
+      return failure();
     }
     if (cudaq::opt::internal::hasCharacteristic(
             [](Operation &op) {
@@ -361,14 +366,15 @@ public:
                          cudaq::cc::InstantiateCallableOp>(op);
             },
             *func.getOperation())) {
-      emitError(loc, "cannot make adjoint of kernel with callable expressions");
-      signalPassFailure();
-      return {};
+      LLVM_DEBUG(
+          llvm::dbgs()
+          << "cannot make adjoint of kernel with callable expressions\n");
+      return failure();
     }
     if (cudaq::opt::hasMeasureOp(func)) {
-      emitError(loc, "cannot make adjoint of kernel with a measurement");
-      signalPassFailure();
-      return {};
+      LLVM_DEBUG(llvm::dbgs()
+                 << "cannot make adjoint of kernel with a measurement\n");
+      return failure();
     }
 
     auto funcTy = func.getFunctionType();
@@ -379,7 +385,7 @@ public:
     funcBody.cloneInto(&newFunc.getBody(), mapping);
     reverseTheOpsInTheBlock(loc, newFunc.getBody().front().getTerminator(),
                             getOpsToInvert(newFunc.getBody().front()));
-    return newFunc;
+    return success();
   }
 
   static SmallVector<Operation *> getOpsToInvert(Block &block) {
@@ -558,11 +564,6 @@ public:
         invert(newIfOp.getElseRegion());
         continue;
       }
-      if (auto forOp = dyn_cast<scf::ForOp>(op)) {
-        LLVM_DEBUG(llvm::dbgs() << "moving for: " << forOp << ".\n");
-        TODO_loc(loc, "cannot make adjoint of kernel with scf.for");
-        // should we convert to cc.loop and use code below?
-      }
       if (auto loopOp = dyn_cast<cudaq::cc::LoopOp>(op)) {
         LLVM_DEBUG(llvm::dbgs() << "moving loop: " << loopOp << ".\n");
         auto newLoopOp = cloneReversedLoop(builder, loopOp);
@@ -615,7 +616,7 @@ public:
   /// This is the combination of adjoint and control transformations. We will
   /// create a control variant here, even if it wasn't needed to simplify
   /// things. The dead variant can be eliminated as unreferenced.
-  func::FuncOp createAdjointControlVariantOf(func::FuncOp func) {
+  [[nodiscard]] LogicalResult createAdjointControlVariantOf(func::FuncOp func) {
     ModuleOp module = getOperation();
     auto funcName = func.getName().str();
     auto ctrlFuncName = getCtrlVariantFunctionName(funcName);
@@ -633,14 +634,10 @@ public:
     auto *ctx = module.getContext();
     RewritePatternSet patterns(ctx);
     patterns.insert<ApplyOpPattern>(ctx);
-    ConversionTarget target(*ctx);
-    target.addLegalDialect<func::FuncDialect, quake::QuakeDialect>();
-    target.addDynamicallyLegalOp<quake::ApplyOp>(
-        [](quake::ApplyOp apply) { return apply->hasAttr("replaced"); });
-    if (failed(applyPartialConversion(module, target, std::move(patterns)))) {
-      emitError(module.getLoc(), "could not rewrite all apply ops.");
+    if (failed(applyPatternsAndFoldGreedily(module, std::move(patterns))))
       signalPassFailure();
-    }
+    LLVM_DEBUG(llvm::dbgs() << "After apply specialization:\n"
+                            << module << "\n\n");
   }
 
   bool getComputeActionOptimization() const {

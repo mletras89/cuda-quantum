@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -18,9 +18,11 @@
 #include "common/RuntimeMLIR.h"
 #include "cudaq.h"
 #include "cudaq/Frontend/nvqpp/AttributeNames.h"
+#include "cudaq/Optimizer/Builder/Intrinsics.h"
 #include "cudaq/Optimizer/Builder/Runtime.h"
 #include "cudaq/Optimizer/CodeGen/OpenQASMEmitter.h"
 #include "cudaq/Optimizer/CodeGen/Passes.h"
+#include "cudaq/Optimizer/CodeGen/QIRAttributeNames.h"
 #include "cudaq/Optimizer/Dialect/CC/CCDialect.h"
 #include "cudaq/Optimizer/Dialect/CC/CCOps.h"
 #include "cudaq/Optimizer/Dialect/Quake/QuakeDialect.h"
@@ -28,9 +30,9 @@
 #include "cudaq/Optimizer/Transforms/Passes.h"
 #include "cudaq/Support/Plugin.h"
 #include "cudaq/Support/TargetConfig.h"
+#include "cudaq/operators.h"
 #include "cudaq/platform/qpu.h"
 #include "cudaq/platform/quantum_platform.h"
-#include "cudaq/spin_op.h"
 #include "nvqpp_config.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -144,8 +146,6 @@ public:
   BaseRemoteRESTQPU() : QPU() {
     std::filesystem::path cudaqLibPath{cudaq::getCUDAQLibraryPath()};
     platformPath = cudaqLibPath.parent_path().parent_path() / "targets";
-    // Default is to run sampling via the remote rest call
-    executor = std::make_unique<cudaq::Executor>();
   }
 
   BaseRemoteRESTQPU(BaseRemoteRESTQPU &&) = delete;
@@ -163,6 +163,9 @@ public:
   bool supportsConditionalFeedback() override {
     return codegenTranslation == "qir-adaptive";
   }
+
+  /// @brief Return true if the current backend supports explicit measurements
+  bool supportsExplicitMeasurements() override { return false; }
 
   /// Provide the number of shots
   void setShots(int _nShots) override {
@@ -299,8 +302,11 @@ public:
 	
     std::string allowEarlyExitSetting =
         (codegenTranslation == "qir-adaptive") ? "1" : "0";
-    passPipelineConfig = std::string("cc-loop-unroll{allow-early-exit=") +
-                         allowEarlyExitSetting + "}," + passPipelineConfig;
+
+    passPipelineConfig =
+        std::string(
+            "func.func(memtoreg{quantum=0},cc-loop-unroll{allow-early-exit=") +
+        allowEarlyExitSetting + "})," + passPipelineConfig;
 
     auto disableQM = backendConfig.find("disable_qubit_mapping");
     if (disableQM != backendConfig.end() && disableQM->second == "true") {
@@ -320,11 +326,19 @@ public:
 
     // Set the qpu name
     qpuName = mutableBackend;
-
     // Create the ServerHelper for this QPU and give it the backend config
     serverHelper = cudaq::registry::get<cudaq::ServerHelper>(qpuName);
+    if (!serverHelper) {
+      throw std::runtime_error("ServerHelper not found for target");
+    }
     serverHelper->initialize(backendConfig);
     serverHelper->updatePassPipeline(platformPath, passPipelineConfig);
+    cudaq::info("Retrieving executor with name {}", qpuName);
+    cudaq::info("Is this executor registered? {}",
+                cudaq::registry::isRegistered<cudaq::Executor>(qpuName));
+    executor = cudaq::registry::isRegistered<cudaq::Executor>(qpuName)
+                   ? cudaq::registry::get<cudaq::Executor>(qpuName)
+                   : std::make_unique<cudaq::Executor>();
 
     // Give the server helper to the executor
     executor->setServerHelper(serverHelper.get());
@@ -332,6 +346,7 @@ public:
 
   /// @brief Conditionally form an output_names JSON object if this was for QIR
   nlohmann::json formOutputNames(const std::string &codegenTranslation,
+                                 mlir::ModuleOp moduleOp,
                                  const std::string &codeStr) {
     // Form an output_names mapping from codeStr
     nlohmann::json output_names;
@@ -354,6 +369,17 @@ public:
               func.hasFnAttribute("output_names")) {
             output_names = nlohmann::json::parse(
                 func.getFnAttribute("output_names").getValueAsString());
+            break;
+          }
+        }
+      }
+    } else if (codegenTranslation.starts_with("qasm2")) {
+      for (auto &op : moduleOp) {
+        if (op.hasAttr(cudaq::entryPointAttrName) &&
+            op.hasAttr("output_names")) {
+          if (auto strAttr = op.getAttr(cudaq::opt::QIROutputNamesAttrName)
+                                 .dyn_cast_or_null<mlir::StringAttr>()) {
+            output_names = nlohmann::json::parse(strAttr.getValue());
             break;
           }
         }
@@ -405,8 +431,8 @@ public:
     for (auto &op : m_module.getOps()) {
       // Add any global symbols, including global constant arrays.
       // Global constant arrays can be created during compilation,
-      // `lift-array-value`, `quake-synthesizer`, and `get-concrete-matrix`
-      // passes.
+      // `lift-array-alloc`, `argument-synthesis`, `quake-synthesizer`,
+      // and `get-concrete-matrix` passes.
       if (auto globalOp = dyn_cast<cudaq::cc::GlobalOp>(op))
         moduleOp.push_back(globalOp.clone());
     }
@@ -434,16 +460,36 @@ public:
       mlir::PassManager pm(&context);
       if (!rawArgs.empty()) {
         cudaq::info("Run Argument Synth.\n");
-        opt::ArgumentConverter argCon(kernelName, moduleOp, false);
+        // For quantum devices, we generate a collection of `init` and
+        // `num_qubits` functions and their substitutions created
+        // from a kernel and arguments that generated a state argument.
+        cudaq::opt::ArgumentConverter argCon(kernelName, moduleOp);
         argCon.gen(rawArgs);
-        std::string kernName = cudaq::runtime::cudaqGenPrefixName + kernelName;
-        mlir::SmallVector<mlir::StringRef> kernels = {kernName};
-        std::string substBuff;
-        llvm::raw_string_ostream ss(substBuff);
-        ss << argCon.getSubstitutionModule();
-        mlir::SmallVector<mlir::StringRef> substs = {substBuff};
+
+        // Store kernel and substitution strings on the stack.
+        // We pass string references to the `createArgumentSynthesisPass`.
+        mlir::SmallVector<std::string> kernels;
+        mlir::SmallVector<std::string> substs;
+        for (auto *kInfo : argCon.getKernelSubstitutions()) {
+          std::string kernName =
+              cudaq::runtime::cudaqGenPrefixName + kInfo->getKernelName().str();
+          kernels.emplace_back(kernName);
+          std::string substBuff;
+          llvm::raw_string_ostream ss(substBuff);
+          ss << kInfo->getSubstitutionModule();
+          substs.emplace_back(substBuff);
+        }
+
+        // Collect references for the argument synthesis.
+        mlir::SmallVector<mlir::StringRef> kernelRefs{kernels.begin(),
+                                                      kernels.end()};
+        mlir::SmallVector<mlir::StringRef> substRefs{substs.begin(),
+                                                     substs.end()};
+        pm.addPass(opt::createArgumentSynthesisPass(kernelRefs, substRefs));
+        pm.addPass(opt::createDeleteStates());
         pm.addNestedPass<mlir::func::FuncOp>(
-            opt::createArgumentSynthesisPass(kernels, substs));
+            opt::createReplaceStateWithKernel());
+        pm.addPass(mlir::createSymbolDCEPass());
       } else if (updatedArgs) {
         cudaq::info("Run Quake Synth.\n");
         pm.addPass(cudaq::opt::createQuakeSynthesizer(kernelName, updatedArgs));
@@ -455,6 +501,20 @@ public:
         pm.enableIRPrinting();
       if (failed(pm.run(moduleOp)))
         throw std::runtime_error("Could not successfully apply quake-synth.");
+    }
+
+    // Delay combining measurements for backends that cannot handle
+    // subveqs and multiple measurements until we created the emulation code.
+    auto combineMeasurements =
+        passPipelineConfig.find("combine-measurements") != std::string::npos;
+    if (emulate && combineMeasurements) {
+      std::regex combine("(.*),([ ]*)combine-measurements(.*)");
+      std::string replacement("$1$3");
+      passPipelineConfig =
+          std::regex_replace(passPipelineConfig, combine, replacement);
+      cudaq::info("Delaying combine-measurements pass due to emulation. "
+                  "Updating pipeline to {}",
+                  passPipelineConfig);
     }
 
     runPassPipeline(passPipelineConfig, moduleOp);
@@ -483,30 +543,26 @@ public:
     if (executionContext && executionContext->name == "observe") {
       mapping_reorder_idx.clear();
       runPassPipeline("canonicalize,cse", moduleOp);
-      cudaq::spin_op &spin = *executionContext->spin.value();
+      cudaq::spin_op &spin = executionContext->spin.value();
       for (const auto &term : spin) {
         if (term.is_identity())
           continue;
 
         // Get the ansatz
-        auto ansatz = moduleOp.lookupSymbol<mlir::func::FuncOp>(
-            std::string(cudaq::runtime::cudaqGenPrefixName) + kernelName);
+        [[maybe_unused]] auto ansatz =
+            moduleOp.lookupSymbol<mlir::func::FuncOp>(
+                cudaq::runtime::cudaqGenPrefixName + kernelName);
+        assert(ansatz && "could not find the ansatz kernel");
 
         // Create a new Module to clone the ansatz into it
-        auto tmpModuleOp = builder.create<mlir::ModuleOp>();
-        tmpModuleOp.push_back(ansatz.clone());
-        moduleOp.walk([&](quake::WireSetOp wireSetOp) {
-          tmpModuleOp.push_back(wireSetOp.clone());
-        });
+        auto tmpModuleOp = moduleOp.clone();
 
-        // Extract the binary symplectic encoding
-        auto [binarySymplecticForm, coeffs] = term.get_raw_data();
-
-        // Create the pass manager, add the quake observe ansatz pass
-        // and run it followed by the canonicalizer
+        // Create the pass manager, add the quake observe ansatz pass and run it
+        // followed by the canonicalizer
         mlir::PassManager pm(&context);
         pm.addNestedPass<mlir::func::FuncOp>(
-            cudaq::opt::createObserveAnsatzPass(binarySymplecticForm[0]));
+            cudaq::opt::createObserveAnsatzPass(
+                term.get_binary_symplectic_form()));
         if (disableMLIRthreading || enablePrintMLIREachPass)
           tmpModuleOp.getContext()->disableMultithreading();
         if (enablePrintMLIREachPass)
@@ -521,22 +577,27 @@ public:
         for (auto &pass : csvSplit)
           if (pass.ends_with("-gate-set-mapping"))
             runPassPipeline(pass, tmpModuleOp);
-        modules.emplace_back(term.to_string(false), tmpModuleOp);
+        if (!emulate && combineMeasurements)
+          runPassPipeline("func.func(combine-measurements)", tmpModuleOp);
+        modules.emplace_back(term.get_term_id(), tmpModuleOp);
       }
     } else
       modules.emplace_back(kernelName, moduleOp);
 
     if (emulate) {
-      // If we are in emulation mode, we need to first get a
-      // full QIR representation of the code. Then we'll map to
-      // an LLVM Module, create a JIT ExecutionEngine pointer
-      // and use that for execution
+      // If we are in emulation mode, we need to first get a full QIR
+      // representation of the code. Then we'll map to an LLVM Module, create a
+      // JIT ExecutionEngine pointer and use that for execution
       for (auto &[name, module] : modules) {
         auto clonedModule = module.clone();
         jitEngines.emplace_back(
             cudaq::createQIRJITEngine(clonedModule, codegenTranslation));
       }
     }
+
+    if (emulate && combineMeasurements)
+      for (auto &[name, module] : modules)
+        runPassPipeline("func.func(combine-measurements)", module);
 
     // Get the code gen translation
     //std::cout << "LETRAS: codegenTranslation " << codegenTranslation << std::endl;
@@ -570,7 +631,8 @@ public:
       }
 
       // Form an output_names mapping from codeStr
-      nlohmann::json j = formOutputNames(codegenTranslation, codeStr);
+      nlohmann::json j =
+          formOutputNames(codegenTranslation, moduleOpI, codeStr);
 
       codes.emplace_back(name, codeStr, j, mapping_reorder_idx);
     }
@@ -598,9 +660,11 @@ public:
   /// the representation required by the targeted backend. Handle all pertinent
   /// modifications for the execution context as well as asynchronous or
   /// synchronous invocation.
-  void launchKernel(const std::string &kernelName, void (*kernelFunc)(void *),
-                    void *args, std::uint64_t voidStarSize,
-                    std::uint64_t resultOffset) override {
+  KernelThunkResultType
+  launchKernel(const std::string &kernelName, KernelThunkType kernelFunc,
+               void *args, std::uint64_t voidStarSize,
+               std::uint64_t resultOffset,
+               const std::vector<void *> &rawArgs) override {
     cudaq::info("launching remote rest kernel ({})", kernelName);
 
     // TODO future iterations of this should support non-void return types.
@@ -610,8 +674,15 @@ public:
           "cudaq::observe(), or cudaq::draw().");
 
     // Get the Quake code, lowered according to config file.
-    auto codes = lowerQuakeCode(kernelName, args);
+    // FIXME: For python, we reach here with rawArgs being empty and args having
+    // the arguments. Python should be using the streamlined argument synthesis,
+    // but apparently it isn't. This works around that bug.
+    auto codes = rawArgs.empty() ? lowerQuakeCode(kernelName, args)
+                                 : lowerQuakeCode(kernelName, rawArgs);
     completeLaunchKernel(kernelName, std::move(codes));
+
+    // NB: Kernel should/will never return dynamic results.
+    return {};
   }
 
   void completeLaunchKernel(const std::string &kernelName,
@@ -634,6 +705,7 @@ public:
       localShots = executionContext->shots;
 
     executor->setShots(localShots);
+    bool isObserve = executionContext && executionContext->name == "observe";
 
     // If emulation requested, then just grab the function
     // and invoke it with the simulator
@@ -646,7 +718,7 @@ public:
       // Launch the execution of the simulated jobs asynchronously
       future = cudaq::details::future(std::async(
           std::launch::async,
-          [&, codes, localShots, kernelName, seed,
+          [&, codes, localShots, kernelName, seed, isObserve,
            reorderIdx = executionContext->reorderIdx,
            localJIT = std::move(jitEngines)]() mutable -> cudaq::sample_result {
             std::vector<cudaq::ExecutionResult> results;
@@ -657,7 +729,7 @@ public:
 
             bool hasConditionals =
                 cudaq::kernelHasConditionalFeedback(kernelName);
-            if (hasConditionals && codes.size() > 1)
+            if (hasConditionals && isObserve)
               throw std::runtime_error("error: spin_ops not yet supported with "
                                        "kernels containing conditionals");
             if (hasConditionals) {
@@ -694,9 +766,8 @@ public:
               invokeJITKernelAndRelease(localJIT[i], kernelName);
               cudaq::getExecutionManager()->resetExecutionContext();
 
-              // If there are multiple codes, this is likely a spin_op.
-              // If so, use the code name instead of the global register.
-              if (codes.size() > 1) {
+              if (isObserve) {
+                // Use the code name instead of the global register.
                 results.emplace_back(context.result.to_map(), codes[i].name);
                 results.back().sequentialData =
                     context.result.sequential_data();
@@ -718,8 +789,7 @@ public:
       // Allow developer to disable remote sending (useful for debugging IR)
       if (getEnvBool("DISABLE_REMOTE_SEND", false))
         return;
-      else
-        future = executor->execute(codes);
+      future = executor->execute(codes, isObserve);
     }
 
     // Keep this asynchronous if requested

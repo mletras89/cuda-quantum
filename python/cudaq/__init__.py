@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -7,7 +7,8 @@
 # ============================================================================ #
 
 import sys, os, numpy, platform, multiprocessing
-from ._packages import *
+from ._packages import get_library_path
+from ._metadata import cuda_major
 
 # Set the multiprocessing start method to 'spawn' if not already set
 if multiprocessing.get_start_method(allow_none=True) is None:
@@ -15,26 +16,32 @@ if multiprocessing.get_start_method(allow_none=True) is None:
 
 # CUDAQ_DYNLIBS must be set before any other imports that would initialize
 # LinkedLibraryHolder.
-if not "CUDAQ_DYNLIBS" in os.environ:
+if not "CUDAQ_DYNLIBS" in os.environ and not cuda_major is None:
     try:
-        custatevec_libs = get_library_path("custatevec-cu11")
+        custatevec_libs = get_library_path(f"custatevec-cu{cuda_major}")
         custatevec_path = os.path.join(custatevec_libs, "libcustatevec.so.1")
 
-        cutensornet_libs = get_library_path("cutensornet-cu11")
+        cutensornet_libs = get_library_path(f"cutensornet-cu{cuda_major}")
         cutensornet_path = os.path.join(cutensornet_libs, "libcutensornet.so.2")
 
-        os.environ["CUDAQ_DYNLIBS"] = f"{custatevec_path}:{cutensornet_path}"
+        cutensor_libs = get_library_path(f"cutensor-cu{cuda_major}")
+        cutensor_path = os.path.join(cutensor_libs, "libcutensor.so.2")
 
-        # The following package is only available on `x86_64` (not `aarch64`). For
-        # `aarch64`, the library must be provided another way (likely with
-        # LD_LIBRARY_PATH).
-        if platform.processor() == "x86_64":
-            cudart_libs = get_library_path("nvidia-cuda_runtime-cu11")
-            cudart_path = os.path.join(cudart_libs, "libcudart.so.11.0")
-            os.environ["CUDAQ_DYNLIBS"] += f":{cudart_path}"
+        curand_libs = get_library_path(f"nvidia-curand-cu{cuda_major}")
+        curand_path = os.path.join(curand_libs, "libcurand.so.10")
+
+        cudart_libs = get_library_path(f"nvidia-cuda_runtime-cu{cuda_major}")
+        cudart_path = os.path.join(cudart_libs, f"libcudart.so.{cuda_major}")
+
+        cuda_nvrtc_libs = get_library_path(f"nvidia-cuda_nvrtc-cu{cuda_major}")
+        cuda_nvrtc_path = os.path.join(cuda_nvrtc_libs,
+                                       f"libnvrtc.so.{cuda_major}")
+
+        os.environ[
+            "CUDAQ_DYNLIBS"] = f"{custatevec_path}:{cutensornet_path}:{cutensor_path}:{cudart_path}:{curand_path}:{cuda_nvrtc_path}"
     except:
         import importlib.util
-        package_spec = importlib.util.find_spec("cuda-quantum")
+        package_spec = importlib.util.find_spec(f"cuda-quantum-cu{cuda_major}")
         if not package_spec is None and not package_spec.loader is None:
             print("Could not find a suitable cuQuantum Python package.")
         pass
@@ -47,7 +54,6 @@ from .runtime.sample import sample
 from .runtime.observe import observe
 from .runtime.state import to_cupy
 from .kernel.register_op import register_operation
-
 from .mlir._mlir_libs._quakeDialects import cudaq_runtime
 
 try:
@@ -63,11 +69,9 @@ else:
 parallel = cudaq_runtime.parallel
 
 # Primitive Types
-spin = cudaq_runtime.spin
 qubit = cudaq_runtime.qubit
 qvector = cudaq_runtime.qvector
 qview = cudaq_runtime.qview
-SpinOperator = cudaq_runtime.SpinOperator
 Pauli = cudaq_runtime.Pauli
 Kernel = PyKernel
 Target = cudaq_runtime.Target
@@ -78,6 +82,20 @@ SimulationPrecision = cudaq_runtime.SimulationPrecision
 
 # to be deprecated
 qreg = cudaq_runtime.qvector
+
+# Operator API
+from .operators import boson
+from .operators import fermion
+from .operators import spin
+from .operators import custom as operators
+from .operators.definitions import *
+from .operators.manipulation import OperatorArithmetics
+import cudaq.operators.expressions  # needs to be imported, since otherwise e.g. evaluate is not defined
+
+# Time evolution API
+from .dynamics.schedule import Schedule
+from .dynamics.evolution import evolve, evolve_async
+from .dynamics.integrators import *
 
 # Optimizers + Gradients
 optimizers = cudaq_runtime.optimizers
@@ -101,11 +119,20 @@ unset_noise = cudaq_runtime.unset_noise
 # Noise Modeling
 KrausChannel = cudaq_runtime.KrausChannel
 KrausOperator = cudaq_runtime.KrausOperator
+NoiseModelType = cudaq_runtime.NoiseModelType
 NoiseModel = cudaq_runtime.NoiseModel
 DepolarizationChannel = cudaq_runtime.DepolarizationChannel
 AmplitudeDampingChannel = cudaq_runtime.AmplitudeDampingChannel
 PhaseFlipChannel = cudaq_runtime.PhaseFlipChannel
 BitFlipChannel = cudaq_runtime.BitFlipChannel
+PhaseDamping = cudaq_runtime.PhaseDamping
+ZError = cudaq_runtime.ZError
+XError = cudaq_runtime.XError
+YError = cudaq_runtime.YError
+Pauli1 = cudaq_runtime.Pauli1
+Pauli2 = cudaq_runtime.Pauli2
+Depolarization1 = cudaq_runtime.Depolarization1
+Depolarization2 = cudaq_runtime.Depolarization2
 
 # Functions
 sample_async = cudaq_runtime.sample_async
@@ -114,6 +141,8 @@ get_state = cudaq_runtime.get_state
 get_state_async = cudaq_runtime.get_state_async
 SampleResult = cudaq_runtime.SampleResult
 ObserveResult = cudaq_runtime.ObserveResult
+EvolveResult = cudaq_runtime.EvolveResult
+AsyncEvolveResult = cudaq_runtime.AsyncEvolveResult
 AsyncSampleResult = cudaq_runtime.AsyncSampleResult
 AsyncObserveResult = cudaq_runtime.AsyncObserveResult
 AsyncStateResult = cudaq_runtime.AsyncStateResult

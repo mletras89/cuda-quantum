@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -189,7 +189,93 @@ def test_ionq_state_preparation_builder():
     assert not '11' in counts
 
 
-def test_arbitrary_unitary_synthesis():
+def test_ionq_state_synthesis_from_simulator():
+
+    @cudaq.kernel
+    def kernel(state: cudaq.State):
+        qubits = cudaq.qvector(state)
+
+    state = cudaq.State.from_data(
+        np.array([1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.], dtype=complex))
+
+    counts = cudaq.sample(kernel, state)
+    assert "00" in counts
+    assert "10" in counts
+    assert len(counts) == 2
+
+    synthesized = cudaq.synthesize(kernel, state)
+    counts = cudaq.sample(synthesized)
+    assert '00' in counts
+    assert '10' in counts
+    assert len(counts) == 2
+
+
+def test_ionq_state_synthesis_from_simulator_builder():
+
+    kernel, state = cudaq.make_kernel(cudaq.State)
+    qubits = kernel.qalloc(state)
+
+    state = cudaq.State.from_data(
+        np.array([1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.], dtype=complex))
+
+    counts = cudaq.sample(kernel, state)
+    assert "00" in counts
+    assert "10" in counts
+    assert len(counts) == 2
+
+
+def test_Ionq_state_synthesis():
+
+    @cudaq.kernel
+    def init(n: int):
+        q = cudaq.qvector(n)
+        x(q[0])
+
+    @cudaq.kernel
+    def kernel(s: cudaq.State):
+        q = cudaq.qvector(s)
+        x(q[1])
+
+    s = cudaq.get_state(init, 2)
+    s = cudaq.get_state(kernel, s)
+    counts = cudaq.sample(kernel, s)
+    assert '10' in counts
+    assert len(counts) == 1
+
+
+def test_Ionq_state_synthesis_builder():
+
+    init, n = cudaq.make_kernel(int)
+    qubits = init.qalloc(n)
+    init.x(qubits[0])
+
+    s = cudaq.get_state(init, 2)
+
+    kernel, state = cudaq.make_kernel(cudaq.State)
+    qubits = kernel.qalloc(state)
+    kernel.x(qubits[1])
+
+    s = cudaq.get_state(kernel, s)
+    counts = cudaq.sample(kernel, s)
+    assert '10' in counts
+    assert len(counts) == 1
+
+
+def test_exp_pauli():
+
+    @cudaq.kernel
+    def test():
+        q = cudaq.qvector(2)
+        exp_pauli(1.0, q, "XX")
+
+    counts = cudaq.sample(test)
+    assert '00' in counts
+    assert '11' in counts
+    assert not '01' in counts
+    assert not '10' in counts
+
+
+def test_1q_unitary_synthesis():
 
     cudaq.register_operation("custom_h",
                              1. / np.sqrt(2.) * np.array([1, 1, 1, -1]))
@@ -223,6 +309,54 @@ def test_arbitrary_unitary_synthesis():
     counts.dump()
     assert len(counts) == 2
     assert "00" in counts and "11" in counts
+
+    cudaq.register_operation("custom_s", np.array([1, 0, 0, 1j]))
+    cudaq.register_operation("custom_s_adj", np.array([1, 0, 0, -1j]))
+
+    @cudaq.kernel
+    def kernel():
+        q = cudaq.qubit()
+        h(q)
+        custom_s.adj(q)
+        custom_s_adj(q)
+        h(q)
+
+    counts = cudaq.sample(kernel)
+    counts.dump()
+    assert counts["1"] == 1000
+
+
+def test_2q_unitary_synthesis():
+
+    cudaq.register_operation(
+        "custom_cnot",
+        np.array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]))
+
+    @cudaq.kernel
+    def bell_pair():
+        qubits = cudaq.qvector(2)
+        h(qubits[0])
+        custom_cnot(qubits[0], qubits[1])
+
+    counts = cudaq.sample(bell_pair)
+    assert len(counts) == 2
+    assert "00" in counts and "11" in counts
+
+    cudaq.register_operation(
+        "custom_cz", np.array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                               -1]))
+
+    @cudaq.kernel
+    def ctrl_z_kernel():
+        qubits = cudaq.qvector(5)
+        controls = cudaq.qvector(2)
+        custom_cz(qubits[1], qubits[0])
+        x(qubits[2])
+        custom_cz(qubits[3], qubits[2])
+        x(controls)
+
+    counts = cudaq.sample(ctrl_z_kernel)
+    assert counts["0010011"] == 1000
 
 
 # leave for gdb debugging

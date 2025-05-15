@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -7,13 +7,12 @@
 # ============================================================================ #
 from __future__ import annotations
 
-from ..mlir._mlir_libs._quakeDialects import cudaq_runtime
-from ..kernel.kernel_builder import PyKernel
-from ..kernel.kernel_decorator import PyKernelDecorator
-from ..mlir.dialects import quake, cc
+from cudaq.kernel.kernel_builder import PyKernel
+from cudaq.kernel.kernel_decorator import PyKernelDecorator
+from cudaq.mlir._mlir_libs._quakeDialects import cudaq_runtime
+from cudaq.mlir.dialects import cc
 
 import numpy as np
-import sys
 from typing import List
 
 
@@ -81,12 +80,9 @@ def __isBroadcast(kernel, *args):
             'list', 'np.ndarray', 'List', 'List[float]', 'List[complex]',
             'List[int]'
         ])
-        ## [PYTHON_VERSION_FIX]
-        if sys.version_info >= (3, 9):
-            checkList.extend(
-                [list[float], list[complex], list[int], list[bool]])
-            checkList.extend(
-                ['list[float]', 'list[complex]', 'list[int]', 'list[bool]'])
+        checkList.extend([list[float], list[complex], list[int], list[bool]])
+        checkList.extend(
+            ['list[float]', 'list[complex]', 'list[int]', 'list[bool]'])
         firstArgTypeIsStdvec = argTypes[firstArgType] in checkList
         if (isinstance(firstArg, list) or
                 isinstance(firstArg, List)) and not firstArgTypeIsStdvec:

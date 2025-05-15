@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -14,6 +14,8 @@
 #include "cudaq/Optimizer/CodeGen/QIRFunctionNames.h"
 #include "cudaq/Optimizer/Dialect/CC/CCDialect.h"
 #include "cudaq/Optimizer/Dialect/Quake/QuakeDialect.h"
+#include "cudaq/Optimizer/InitAllDialects.h"
+#include "cudaq/Optimizer/InitAllPasses.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/MC/SubtargetFeature.h"
@@ -25,8 +27,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/OptUtils.h"
-#include "mlir/InitAllDialects.h"
-#include "mlir/InitAllPasses.h"
 #include "mlir/InitAllTranslations.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -37,7 +37,6 @@
 using namespace mlir;
 
 namespace cudaq {
-static bool mlirLLVMInitialized = false;
 
 static llvm::StringMap<cudaq::Translation> &getTranslationRegistry() {
   static llvm::StringMap<cudaq::Translation> translationBundle;
@@ -71,33 +70,28 @@ TranslateFromMLIRRegistration::TranslateFromMLIRRegistration(
 
 namespace cudaq {
 
+static std::once_flag mlir_init_flag;
+
 std::unique_ptr<MLIRContext> initializeMLIR() {
-  if (!mlirLLVMInitialized) {
+  // One-time initialization of LLVM/MLIR components
+  std::call_once(mlir_init_flag, []() {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
-    registerAllPasses();
-    cudaq::opt::registerOptCodeGenPasses();
-    cudaq::opt::registerOptTransformsPasses();
+    cudaq::registerAllPasses();
     registerToQIRTranslation();
     registerToOpenQASMTranslation();
     registerToIQMJsonTranslation();
+
     // including the fake translation for MQSS, it is fake because 
     // does not convert code to QIR or QASM, just passed as it is.
     // It is done it like this because it is our intention to modify the less the 
     // CudaQ code
     registerToMQSSTranslation(); 
-    cudaq::opt::registerAggressiveEarlyInlining();
-    cudaq::opt::registerUnrollingPipeline();
-    cudaq::opt::registerTargetPipelines();
-    cudaq::opt::registerWireSetToProfileQIRPipeline();
-    cudaq::opt::registerMappingPipeline();
-    mlirLLVMInitialized = true;
-  }
-
+  });
+  // Per-context initialization
   DialectRegistry registry;
-  registry.insert<quake::QuakeDialect, cc::CCDialect>();
   cudaq::opt::registerCodeGenDialect(registry);
-  registerAllDialects(registry);
+  cudaq::registerAllDialects(registry);
   auto context = std::make_unique<MLIRContext>(registry);
   context->loadAllAvailableDialects();
   registerLLVMDialectTranslation(*context);

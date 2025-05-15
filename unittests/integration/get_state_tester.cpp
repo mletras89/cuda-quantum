@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -13,6 +13,9 @@
 #include <numeric>
 
 using namespace cudaq;
+
+// State operations not supported in Stim.
+#ifndef CUDAQ_BACKEND_STIM
 
 CUDAQ_TEST(GetStateTester, checkSimple) {
   auto kernel = []() __qpu__ {
@@ -158,7 +161,7 @@ __qpu__ void bell() {
 CUDAQ_TEST(GetStateTester, checkOverlapFromHostVector) {
   auto state = cudaq::get_state(bell);
   state.dump();
-  std::vector<std::complex<double>> hostStateData{M_SQRT1_2, 0, 0, M_SQRT1_2};
+  std::vector<cudaq::complex> hostStateData{M_SQRT1_2, 0, 0, M_SQRT1_2};
   auto hostState = cudaq::state::from_data(hostStateData);
   hostState.dump();
   // Check overlap with host vector
@@ -184,3 +187,5 @@ CUDAQ_TEST(GetStateTester, checkKron) {
   EXPECT_EQ(counts.begin()->first,
             "0" + std::string(num_qubits_input_state, '1'));
 }
+
+#endif

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -39,23 +39,23 @@
 # see https://developer.nvidia.com/blog/building-cuda-applications-cmake/
 # (specifically also CUDA_SEPARABLE_COMPILATION)
 
-LLVM_INSTALL_PREFIX=${LLVM_INSTALL_PREFIX:-/opt/llvm}
-CUQUANTUM_INSTALL_PREFIX=${CUQUANTUM_INSTALL_PREFIX:-/opt/nvidia/cuquantum}
-CUTENSOR_INSTALL_PREFIX=${CUTENSOR_INSTALL_PREFIX:-/opt/nvidia/cutensor}
 CUDAQ_INSTALL_PREFIX=${CUDAQ_INSTALL_PREFIX:-"$HOME/.cudaq"}
 
 # Process command line arguments
 build_configuration=${CMAKE_BUILD_TYPE:-Release}
 verbose=false
 install_toolchain=""
+num_jobs=""
 
 __optind__=$OPTIND
 OPTIND=1
-while getopts ":c:t:v" opt; do
+while getopts ":c:t:j:v" opt; do
   case $opt in
     c) build_configuration="$OPTARG"
     ;;
     t) install_toolchain="$OPTARG"
+    ;;
+    j) num_jobs="-j $OPTARG"
     ;;
     v) verbose=true
     ;;
@@ -72,8 +72,10 @@ this_file_dir=`dirname "$(readlink -f "${BASH_SOURCE[0]}")"`
 repo_root=$(cd "$this_file_dir" && git rev-parse --show-toplevel)
 
 # Prepare the build directory
+build_dir="$working_dir/build"
+echo "Build directory: $build_dir"
 mkdir -p "$CUDAQ_INSTALL_PREFIX/bin"
-mkdir -p "$working_dir/build" && cd "$working_dir/build" && rm -rf * 
+mkdir -p "$build_dir" && cd "$build_dir" && rm -rf * 
 mkdir -p logs && rm -rf logs/*
 
 if [ -n "$install_toolchain" ]; then
@@ -105,11 +107,18 @@ if [ "$cuda_version" = "" ] || [ "$cuda_major" -lt "11" ] || ([ "$cuda_minor" -l
   unset cuda_driver
 else 
   echo "CUDA version $cuda_version detected."
+  if [ -z "$CUQUANTUM_INSTALL_PREFIX" ] && [ -x "$(command -v pip)" ] && [ -n "$(pip list | grep -o cuquantum-python-cu$cuda_major)" ]; then
+    CUQUANTUM_INSTALL_PREFIX="$(pip show cuquantum-python-cu$cuda_major | sed -nE 's/Location: (.*)$/\1/p')/cuquantum"
+  fi
   if [ ! -d "$CUQUANTUM_INSTALL_PREFIX" ] || [ -z "$(ls -A "$CUQUANTUM_INSTALL_PREFIX"/* 2> /dev/null)" ]; then
     echo "No cuQuantum installation detected. Please set the environment variable CUQUANTUM_INSTALL_PREFIX to enable cuQuantum integration."
     echo "Some backends will be omitted from the build."
   else
     echo "Using cuQuantum installation in $CUQUANTUM_INSTALL_PREFIX."
+  fi
+
+  if [ -z "$CUTENSOR_INSTALL_PREFIX" ] && [ -x "$(command -v pip)" ] && [ -n "$(pip list | grep -o cutensor-cu$cuda_major)" ]; then
+    CUTENSOR_INSTALL_PREFIX="$(pip show cutensor-cu$cuda_major | sed -nE 's/Location: (.*)$/\1/p')/cutensor"
   fi
   if [ ! -d "$CUTENSOR_INSTALL_PREFIX" ] || [ -z "$(ls -A "$CUTENSOR_INSTALL_PREFIX"/* 2> /dev/null)" ]; then
     echo "No cuTensor installation detected. Please set the environment variable CUTENSOR_INSTALL_PREFIX to enable cuTensor integration."
@@ -121,8 +130,17 @@ fi
 
 # Determine linker and linker flags
 if [ -x "$(command -v "$LLVM_INSTALL_PREFIX/bin/ld.lld")" ]; then
-  echo "Configuring nvq++ to use the lld linker by default."
+  echo "Configuring nvq++ and local build to use the lld linker by default."
   NVQPP_LD_PATH="$LLVM_INSTALL_PREFIX/bin/ld.lld"
+  LINKER_TO_USE="lld"
+  LINKER_FLAGS="-fuse-ld=lld -B$LLVM_INSTALL_PREFIX/bin"
+  LINKER_FLAG_LIST="\
+    -DCMAKE_LINKER='"$LINKER_TO_USE"' \
+    -DCMAKE_EXE_LINKER_FLAGS='"$LINKER_FLAGS"' \
+    -DLLVM_USE_LINKER='"$LINKER_TO_USE"'"
+else
+  echo "No lld linker detected. Using the system linker."
+  LINKER_FLAG_LIST=""
 fi
 
 # Determine CUDA flags
@@ -154,6 +172,7 @@ cmake_args="-G Ninja '"$repo_root"' \
   -DCMAKE_CUDA_COMPILER='"$cuda_driver"' \
   -DCMAKE_CUDA_FLAGS='"$CUDAFLAGS"' \
   -DCMAKE_CUDA_HOST_COMPILER='"${CUDAHOSTCXX:-$CXX}"' \
+  ${LINKER_FLAG_LIST} \
   ${OpenMP_libomp_LIBRARY:+-DOpenMP_C_LIB_NAMES=lib$OpenMP_libomp_LIBRARY} \
   ${OpenMP_libomp_LIBRARY:+-DOpenMP_CXX_LIB_NAMES=lib$OpenMP_libomp_LIBRARY} \
   ${OpenMP_libomp_LIBRARY:+-DOpenMP_libomp_LIBRARY=$OpenMP_libomp_LIBRARY} \
@@ -172,20 +191,29 @@ cmake_args="-G Ninja '"$repo_root"' \
 # here, but keep the definition for CMAKE_CUDA_HOST_COMPILER.
 if $verbose; then 
   echo $cmake_args | xargs cmake
+  status=$?
 else
   echo $cmake_args | xargs cmake \
     2> logs/cmake_error.txt 1> logs/cmake_output.txt
+  status=$?
+fi
+
+# Check if cmake succeeded
+if [ "$status" -ne 0 ]; then
+  echo -e "\e[01;31mError: CMake configuration failed. Please check logs/cmake_error.txt for details.\e[0m" >&2
+  cat logs/cmake_error.txt >&2
+  cd "$working_dir" && (return 0 2>/dev/null) && return 1 || exit 1
 fi
 
 # Build and install CUDA-Q
 echo "Building CUDA-Q with configuration $build_configuration..."
 logs_dir=`pwd`/logs
 if $verbose; then 
-  ninja -j7 install
+  ninja ${num_jobs} install
   status=$?
 else
   echo "The progress of the build is being logged to $logs_dir/ninja_output.txt."
-  ninja -j7 install 2> "$logs_dir/ninja_error.txt" 1> "$logs_dir/ninja_output.txt"
+  ninja ${num_jobs} install 2> "$logs_dir/ninja_error.txt" 1> "$logs_dir/ninja_output.txt"
   status=$?
 fi
 

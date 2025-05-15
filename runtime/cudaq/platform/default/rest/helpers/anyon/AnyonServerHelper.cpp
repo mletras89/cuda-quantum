@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -35,7 +35,7 @@ std::string searchAPIKey(std::string &key, std::string &refreshKey,
 class AnyonServerHelper : public ServerHelper {
 protected:
   /// @brief The base URL
-  std::string baseUrl = "https://api.anyon.cloud/";
+  std::string baseUrl = "https://api.anyon.cloud:5000/";
   /// @brief The machine we are targeting.
   std::string machine = "telegraph-8q"; //"berkeley-25q";//
   /// @brief Time string, when the last tokens were retrieved
@@ -281,7 +281,18 @@ AnyonServerHelper::processResults(ServerMessage &postJobResponse,
   // Store the combined results into the global register
   srs.emplace_back(counts, GlobalRegisterName);
   srs.back().sequentialData = bitstrings;
-  return sample_result(srs);
+  sample_result sampleResult(srs);
+
+  // Now reorder according to reorderIdx[]. This sorts the global bitstring in
+  // original user qubit allocation order.
+  auto thisJobReorderIdxIt = reorderIdx.find(jobId);
+  if (thisJobReorderIdxIt != reorderIdx.end()) {
+    auto &thisJobReorderIdx = thisJobReorderIdxIt->second;
+    if (!thisJobReorderIdx.empty())
+      sampleResult.reorder(thisJobReorderIdx);
+  }
+
+  return sampleResult;
 }
 
 std::map<std::string, std::string>

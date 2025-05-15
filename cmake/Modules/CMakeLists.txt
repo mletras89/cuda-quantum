@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -10,10 +10,11 @@ set(CONFIG_FILES
   CUDAQCommonConfig.cmake
   CUDAQEmDefaultConfig.cmake
   CUDAQNloptConfig.cmake
-  CUDAQSpinConfig.cmake
+  CUDAQOperatorConfig.cmake
   CUDAQConfig.cmake
   CUDAQEnsmallenConfig.cmake
   CUDAQPlatformDefaultConfig.cmake
+  CUDAQPythonInteropConfig.cmake
 )
 set(LANG_FILES
   CMakeCUDAQCompiler.cmake.in

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -9,6 +9,9 @@
 #include "CUDAQTestUtils.h"
 #include <algorithm>
 #include <cudaq/algorithm.h>
+
+// Stim does not support arbitrary state vectors.
+#ifndef CUDAQ_BACKEND_STIM
 
 std::vector<cudaq::complex> randomState(int numQubits) {
   std::vector<cudaq::complex> stateVec(1ULL << numQubits);
@@ -265,25 +268,26 @@ CUDAQ_TEST(AllocationTester, checkChainingGetState) {
 #ifdef CUDAQ_BACKEND_TENSORNET_MPS
 CUDAQ_TEST(AllocationTester, checkStateFromMpsData) {
   {
-    const std::vector<std::complex<double>> mps1{1.0, 0.0};
+    const std::vector<cudaq::complex> mps1{1.0, 0.0};
     const std::vector<std::size_t> mpsExtent1{2, 1};
-    const std::vector<std::complex<double>> mps2{1.0, 0.0};
+    const std::vector<cudaq::complex> mps2{1.0, 0.0};
     const std::vector<std::size_t> mpsExtent2{1, 2};
     cudaq::TensorStateData initData{{mps1.data(), mpsExtent1},
                                     {mps2.data(), mpsExtent2}};
     auto state = cudaq::state::from_data(initData);
     state.dump();
-    std::vector<std::complex<double>> stateVec(4);
+    std::vector<cudaq::complex> stateVec(4);
     state.to_host(stateVec.data(), stateVec.size());
-    EXPECT_NEAR(std::abs(stateVec[0] - 1.0), 0.0, 1e-12);
+    EXPECT_NEAR(std::abs(stateVec[0] - static_cast<cudaq::real>(1.0)), 0.0,
+                1e-12);
     EXPECT_NEAR(std::abs(stateVec[1]), 0.0, 1e-12);
     EXPECT_NEAR(std::abs(stateVec[2]), 0.0, 1e-12);
     EXPECT_NEAR(std::abs(stateVec[3]), 0.0, 1e-12);
   }
   {
-    const std::vector<std::complex<double>> mps1{1.0, 0.0};
+    const std::vector<cudaq::complex> mps1{1.0, 0.0};
     const std::vector<std::size_t> mpsExtent1{2, 1};
-    const std::vector<std::complex<double>> mps2{1.0, 0.0};
+    const std::vector<cudaq::complex> mps2{1.0, 0.0};
     const std::vector<std::size_t> mpsExtent2{1, 2};
     cudaq::TensorStateData initData{{mps1.data(), mpsExtent1},
                                     {mps2.data(), mpsExtent2}};
@@ -330,4 +334,6 @@ CUDAQ_TEST(AllocationTester, checkStateFromMpsData) {
     EXPECT_NEAR(std::abs(overlap), 0.5, 1e-6);
   }
 }
+#endif
+
 #endif

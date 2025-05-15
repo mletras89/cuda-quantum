@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -30,7 +30,7 @@ set_property(GLOBAL APPEND PROPERTY CUDAQ_RUNTIME_LIBS ${LIBRARY_NAME})
 # and by keeping it private, others can specify the
 # backend library later on
 target_link_libraries(${LIBRARY_NAME}
-  PUBLIC cudaq-common cudaq-spin dl fmt::fmt-header-only)
+  PUBLIC cudaq-common cudaq-operator dl fmt::fmt-header-only)
 
 install(TARGETS ${LIBRARY_NAME} 
         EXPORT nvqir-targets 
@@ -38,12 +38,16 @@ install(TARGETS ${LIBRARY_NAME}
         INCLUDES DESTINATION include/nvqir)
 
 add_subdirectory(qpp)
+add_subdirectory(stim)
 
 if (CUSTATEVEC_ROOT AND CUDA_FOUND) 
   add_subdirectory(custatevec)
 endif() 
 if (CUTENSORNET_ROOT AND CUDA_FOUND)
   add_subdirectory(cutensornet)  
+endif()
+if (CUDA_FOUND)
+  add_subdirectory(cudensitymat)
 endif()
 
 install(EXPORT nvqir-targets

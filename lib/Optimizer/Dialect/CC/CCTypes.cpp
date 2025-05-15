@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -8,6 +8,7 @@
 
 #include "cudaq/Optimizer/Dialect/CC/CCTypes.h"
 #include "cudaq/Optimizer/Dialect/CC/CCDialect.h"
+#include "cudaq/Optimizer/Dialect/Quake/QuakeTypes.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -103,6 +104,16 @@ cc::StructType::getPreferredAlignment(const DataLayout &dataLayout,
   return getAlignment();
 }
 
+LogicalResult
+cc::StructType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                       mlir::StringAttr, llvm::ArrayRef<mlir::Type> members,
+                       bool, bool, unsigned long, unsigned int) {
+  for (auto ty : members)
+    if (quake::isQuantumType(ty))
+      return emitError() << "cc.struct may not contain quake types: " << ty;
+  return success();
+}
+
 //===----------------------------------------------------------------------===//
 // ArrayType
 //===----------------------------------------------------------------------===//
@@ -118,7 +129,7 @@ Type cc::ArrayType::parse(AsmParser &parser) {
   }
   if (parser.parseKeyword("x"))
     return {};
-  SizeType size;
+  SizeType size = 0;
   if (succeeded(parser.parseOptionalQuestion())) {
     size = unknownSize;
   } else {
@@ -137,6 +148,24 @@ void cc::ArrayType::print(AsmPrinter &printer) const {
   else
     printer << getSize();
   printer << '>';
+}
+
+LogicalResult
+cc::ArrayType::verify(function_ref<InFlightDiagnostic()> emitError, Type eleTy,
+                      long) {
+  if (quake::isQuantumType(eleTy))
+    return emitError() << "cc.array may not have a quake element type: "
+                       << eleTy;
+  return success();
+}
+
+LogicalResult
+cc::StdvecType::verify(function_ref<InFlightDiagnostic()> emitError,
+                       Type eleTy) {
+  if (quake::isQuantumType(eleTy))
+    return emitError() << "cc.stdvec may not have a quake element type: "
+                       << eleTy;
+  return success();
 }
 
 } // namespace cudaq
@@ -158,7 +187,7 @@ Type cc::SpanLikeType::getElementType() const {
 }
 
 bool isDynamicType(Type ty) {
-  if (isa<StdvecType>(ty))
+  if (isa<SpanLikeType>(ty))
     return true;
   if (auto strTy = dyn_cast<StructType>(ty)) {
     for (auto memTy : strTy.getMembers())
@@ -177,8 +206,8 @@ CallableType CallableType::getNoSignature(MLIRContext *ctx) {
 }
 
 void CCDialect::registerTypes() {
-  addTypes<ArrayType, CallableType, CharspanType, PointerType, StdvecType,
-           StateType, StructType>();
+  addTypes<ArrayType, CallableType, CharspanType, IndirectCallableType,
+           PointerType, StdvecType, StructType>();
 }
 
 } // namespace cudaq::cc

@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -49,6 +49,9 @@ protected:
   std::future<sample_result> inFuture;
   bool wrapsFutureSampling = false;
 
+  /// @brief Whether or not this is in support of an "observe" call
+  bool isObserve = false;
+
 public:
   /// @brief The constructor
   future() = default;
@@ -68,6 +71,11 @@ public:
   future(std::vector<Job> &_jobs, std::string &qpuNameIn,
          std::map<std::string, std::string> &config)
       : jobs(_jobs), qpuName(qpuNameIn), serverConfig(config) {}
+
+  future(std::vector<Job> &_jobs, std::string &qpuNameIn,
+         std::map<std::string, std::string> &config, bool isObserve)
+      : jobs(_jobs), qpuName(qpuNameIn), serverConfig(config),
+        isObserve(isObserve) {}
 
   future &operator=(future &other);
   future &operator=(future &&other);
@@ -94,13 +102,27 @@ protected:
   details::future result;
 
   /// @brief A spin operator, used for observe future tasks
-  spin_op *spinOp = nullptr;
+  std::optional<spin_op> spinOp;
 
 public:
   async_result() = default;
-  async_result(spin_op *s) : spinOp(s) {}
-  async_result(details::future &&f, spin_op *op = nullptr)
-      : result(std::move(f)), spinOp(op) {}
+  async_result(const spin_op *s) {
+    if (s) {
+      spinOp = *s;
+      spinOp.value().canonicalize();
+    }
+  }
+  async_result(details::future &&f, const spin_op *op = nullptr)
+      : result(std::move(f)) {
+    if (op) {
+      spinOp = *op;
+      spinOp.value().canonicalize();
+    }
+  }
+
+  virtual ~async_result() = default;
+  async_result(async_result &&) = default;
+  async_result &operator=(async_result &&other) = default;
 
   /// @brief Return the asynchronously computed data, will
   /// wait until the data is ready.
@@ -111,24 +133,34 @@ public:
       return data;
 
     if constexpr (std::is_same_v<T, observe_result>) {
-      auto checkRegName = spinOp->to_string(false);
-      if (data.has_expectation(checkRegName))
-        return observe_result(data.expectation(checkRegName), *spinOp, data);
-
       if (!spinOp)
         throw std::runtime_error(
             "Returning an observe_result requires a spin_op.");
 
+      auto checkRegName = spinOp->to_string();
+      if (data.has_expectation(checkRegName))
+        return observe_result(data.expectation(checkRegName), *spinOp, data);
+
       // this assumes we ran in shots mode.
       double sum = 0.0;
-      spinOp->for_each_term([&](spin_op &term) {
+      for (const auto &term : spinOp.value()) {
         if (term.is_identity())
-          sum += term.get_coefficient().real();
+          // FIXME: simply taking real here is very unclean at best,
+          // and might be wrong/hiding a user error that should cause a failure
+          // at worst. It would be good to not store a general spin op for the
+          // result, but instead store the term ids and the evaluated
+          // (double-valued) coefficient. Similarly, evaluate would fail if
+          // the operator was parameterized. In general, both parameters, and
+          // complex coefficients are valid for a spin-op term.
+          // The code here (and in all other places that do something similar)
+          // will work perfectly fine as long as there is no user error, but
+          // the passed observable should really be validated properly and not
+          // processed here as is making assumptions about correctness.
+          sum += term.evaluate_coefficient().real();
         else
-          sum += data.expectation(term.to_string(false)) *
-                 term.get_coefficient().real();
-      });
-
+          sum += data.expectation(term.get_term_id()) *
+                 term.evaluate_coefficient().real();
+      }
       return observe_result(sum, *spinOp, data);
     }
 

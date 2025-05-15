@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -14,11 +14,11 @@
 #include "SimulationState.h"
 #include "Trace.h"
 #include "cudaq/algorithms/optimizer.h"
+#include "cudaq/operators.h"
 #include <optional>
 #include <string_view>
 
 namespace cudaq {
-class spin_op;
 
 /// @brief The ExecutionContext is an abstraction to indicate
 /// how a CUDA-Q kernel should be executed.
@@ -31,7 +31,7 @@ public:
   std::size_t shots = 0;
 
   /// @brief An optional spin operator
-  std::optional<cudaq::spin_op *> spin;
+  std::optional<cudaq::spin_op> spin;
 
   /// @brief Measurement counts for a CUDA-Q kernel invocation
   sample_result result;
@@ -61,6 +61,10 @@ public:
   /// @brief When execution asynchronously, store
   /// the expected results as a cudaq::future here.
   details::future futureResult;
+
+  /// @brief Construct a `async_sample_result` so as to pass across Python
+  /// boundary
+  async_result<sample_result> asyncResult;
 
   /// @brief Pointer to simulation-specific simulation data.
   std::unique_ptr<SimulationState> simulationState;
@@ -104,6 +108,14 @@ public:
   /// Note: this is only needed for invocation not able to return a
   /// `sample_result`.
   std::vector<char> invocationResultBuffer;
+
+  /// @brief The number of trajectories to be used for an expectation
+  /// calculation on simulation backends that support trajectory simulation.
+  std::optional<std::size_t> numberTrajectories;
+
+  /// @brief Whether or not to simply concatenate measurements in execution
+  /// order.
+  bool explicitMeasurements = false;
 
   /// @brief The Constructor, takes the name of the context
   /// @param n The name of the context

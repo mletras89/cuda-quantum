@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -20,7 +20,6 @@
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "llvm/ADT/ScopedHashTable.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/Builders.h"
@@ -231,6 +230,8 @@ public:
   // Stmt nodes to lower to Quake.
   //===--------------------------------------------------------------------===//
 
+  bool TraverseDeclStmt(clang::DeclStmt *x, DataRecursionQueue *q = nullptr);
+
   bool VisitBreakStmt(clang::BreakStmt *x);
   bool TraverseCompoundStmt(clang::CompoundStmt *x,
                             DataRecursionQueue *q = nullptr);
@@ -286,6 +287,7 @@ public:
                                 DataRecursionQueue *q = nullptr);
   bool VisitCXXConstructExpr(clang::CXXConstructExpr *x);
   bool VisitCXXOperatorCallExpr(clang::CXXOperatorCallExpr *x);
+  bool VisitCXXParenListInitExpr(clang::CXXParenListInitExpr *x);
   bool WalkUpFromCXXOperatorCallExpr(clang::CXXOperatorCallExpr *x);
   bool TraverseDeclRefExpr(clang::DeclRefExpr *x,
                            DataRecursionQueue *q = nullptr);
@@ -339,6 +341,7 @@ public:
 
   bool VisitInitListExpr(clang::InitListExpr *x);
   bool VisitIntegerLiteral(clang::IntegerLiteral *x);
+  bool VisitCharacterLiteral(clang::CharacterLiteral *x);
   bool VisitCXXBoolLiteralExpr(clang::CXXBoolLiteralExpr *x);
   bool VisitMaterializeTemporaryExpr(clang::MaterializeTemporaryExpr *x);
   bool VisitUnaryOperator(clang::UnaryOperator *x);
@@ -447,9 +450,9 @@ public:
   /// type. Otherwise, just returns \p val.
   mlir::Value loadLValue(mlir::Value val) {
     auto valTy = val.getType();
-    if (valTy.isa<cudaq::cc::PointerType>())
+    if (isa<cudaq::cc::PointerType>(valTy))
       return builder.create<cudaq::cc::LoadOp>(val.getLoc(), val);
-    if (valTy.isa<mlir::LLVM::LLVMPointerType>())
+    if (isa<mlir::LLVM::LLVMPointerType>(valTy))
       return builder.create<mlir::LLVM::LoadOp>(val.getLoc(), val);
     return val;
   }
@@ -499,6 +502,9 @@ public:
   bool isItaniumCXXABI();
 
 private:
+  /// Check that the value on the top of the stack is an entry-point kernel.
+  bool hasTOSEntryKernel();
+
   /// Map the block arguments to the names of the function parameters.
   void addArgumentSymbols(mlir::Block *entryBlock,
                           mlir::ArrayRef<clang::ParmVarDecl *> parameters);

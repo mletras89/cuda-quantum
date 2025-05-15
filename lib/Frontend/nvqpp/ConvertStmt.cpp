@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -38,6 +38,17 @@ bool QuakeBridgeVisitor::VisitContinueStmt(clang::ContinueStmt *x) {
   if (builder.getBlock())
     builder.create<cc::UnwindContinueOp>(toLocation(x));
   return true;
+}
+
+bool QuakeBridgeVisitor::TraverseDeclStmt(clang::DeclStmt *x,
+                                          DataRecursionQueue *q) {
+  const auto depthBefore = valueStack.size();
+  auto result = Base::TraverseDeclStmt(x, q);
+  const auto depthAfter = valueStack.size();
+  if (result && depthAfter > depthBefore) {
+    [[maybe_unused]] auto unused = lastValues(depthAfter - depthBefore);
+  }
+  return result;
 }
 
 bool QuakeBridgeVisitor::VisitCompoundAssignOperator(
@@ -331,7 +342,9 @@ bool QuakeBridgeVisitor::VisitReturnStmt(clang::ReturnStmt *x) {
                                                 ValueRange{heapCopy, dynSize});
       };
       IRBuilder irb(builder);
-      Value tySize = irb.getByteSizeOfType(loc, eleTy);
+      Value tySize;
+      if (!cudaq::cc::isDynamicType(eleTy))
+        tySize = irb.getByteSizeOfType(loc, eleTy);
       if (!tySize) {
         TODO_x(toLocation(x), x, mangler, "unhandled vector element type");
         return false;

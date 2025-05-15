@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -10,7 +10,7 @@
 #include <numeric>
 
 #include <cudaq/algorithms/observe.h>
-#include <cudaq/spin_op.h>
+#include <cudaq/operators.h>
 
 #ifndef CUDAQ_BACKEND_DM
 CUDAQ_TEST(QubitQISTester, checkAllocateDeallocateSubRegister) {
@@ -142,6 +142,7 @@ CUDAQ_TEST(QubitQISTester, checkCommonKernel) {
   }
   EXPECT_EQ(counter, 1000);
 
+#ifndef CUDAQ_BACKEND_STIM
   auto ansatz = [](double theta) {
     cudaq::qvector q(2);
     x(q[0]);
@@ -149,14 +150,16 @@ CUDAQ_TEST(QubitQISTester, checkCommonKernel) {
     x<cudaq::ctrl>(q[1], q[0]);
   };
 
-  using namespace cudaq::spin;
-
-  cudaq::spin_op h = 5.907 - 2.1433 * x(0) * x(1) - 2.1433 * y(0) * y(1) +
-                     .21829 * z(0) - 6.125 * z(1);
+  cudaq::spin_op h =
+      5.907 - 2.1433 * cudaq::spin_op::x(0) * cudaq::spin_op::x(1) -
+      2.1433 * cudaq::spin_op::y(0) * cudaq::spin_op::y(1) +
+      .21829 * cudaq::spin_op::z(0) - 6.125 * cudaq::spin_op::z(1);
   auto energy = cudaq::observe(ansatz, h, .59);
   EXPECT_NEAR(energy, -1.7487, 1e-3);
+#endif
 }
 
+#ifndef CUDAQ_BACKEND_STIM
 CUDAQ_TEST(QubitQISTester, checkCtrlRegion) {
 
   auto ccnot = []() {
@@ -227,7 +230,9 @@ CUDAQ_TEST(QubitQISTester, checkCtrlRegion) {
   EXPECT_EQ(1, counts3.size());
   EXPECT_TRUE(counts3.begin()->first == "101");
 }
+#endif
 
+#ifndef CUDAQ_BACKEND_STIM
 CUDAQ_TEST(QubitQISTester, checkAdjointRegions) {
   struct single_adjoint_test {
     void operator()() __qpu__ {
@@ -334,6 +339,7 @@ CUDAQ_TEST(QubitQISTester, checkAdjointRegions) {
   EXPECT_EQ(1, counts5.size());
   EXPECT_TRUE(counts5.begin()->first == "101");
 }
+#endif
 
 CUDAQ_TEST(QubitQISTester, checkMeasureResetFence) {
   {
@@ -367,6 +373,7 @@ CUDAQ_TEST(QubitQISTester, checkMeasureResetFence) {
   }
 }
 
+#ifndef CUDAQ_BACKEND_STIM
 CUDAQ_TEST(QubitQISTester, checkU3Op) {
   auto check_x = []() {
     cudaq::qubit q;
@@ -391,7 +398,9 @@ CUDAQ_TEST(QubitQISTester, checkU3Op) {
     EXPECT_TRUE(bits == "00" || bits == "11");
   }
 }
+#endif
 
+#ifndef CUDAQ_BACKEND_STIM
 CUDAQ_TEST(QubitQISTester, checkU3Ctrl) {
   auto another_bell_pair = []() {
     cudaq::qvector qubits(2);
@@ -404,14 +413,16 @@ CUDAQ_TEST(QubitQISTester, checkU3Ctrl) {
     EXPECT_TRUE(bits == "00" || bits == "11");
   }
 }
+#endif
 
+#ifndef CUDAQ_BACKEND_STIM
 CUDAQ_TEST(QubitQISTester, checkU3Adj) {
   auto rotation_adjoint_test = []() {
     cudaq::qubit q;
     // mimic Rx gate
     u3(1.1, -M_PI_2, M_PI_2, q);
-    // rx<adj>(angle) = u3<adj>(angle, pi/2, -pi/2)
-    u3<cudaq::adj>(1.1, M_PI_2, -M_PI_2, q);
+    // rx<adj>(angle) = u3<adj>(angle, -pi/2, pi/2)
+    u3<cudaq::adj>(1.1, -M_PI_2, M_PI_2, q);
     // mimic Ry gate
     u3(1.1, 0., 0., q);
     u3<cudaq::adj>(1.1, 0., 0., q);
@@ -423,8 +434,11 @@ CUDAQ_TEST(QubitQISTester, checkU3Adj) {
     EXPECT_TRUE(bits == "0");
   }
 }
+#endif
 
 using namespace std::complex_literals;
+
+#ifndef CUDAQ_BACKEND_STIM
 
 // Test someone can build a library of custom operations
 CUDAQ_REGISTER_OPERATION(
@@ -643,4 +657,5 @@ CUDAQ_TEST(CustomUnitaryTester, checkMultiQubitOps) {
 #endif
 }
 
+#endif
 #endif

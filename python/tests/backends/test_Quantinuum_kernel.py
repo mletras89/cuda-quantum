@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -45,7 +45,8 @@ def startUpMockServer():
 
     if not check_server_connection(port):
         p.terminate()
-        pytest.exit("Mock server did not start in time, skipping tests.", returncode=1)
+        pytest.exit("Mock server did not start in time, skipping tests.",
+                    returncode=1)
 
     yield credsName
 
@@ -187,6 +188,60 @@ def test_quantinuum_state_preparation():
     assert '10' in counts
     assert not '01' in counts
     assert not '11' in counts
+
+
+def test_quantinuum_state_synthesis_from_simulator():
+
+    @cudaq.kernel
+    def kernel(state: cudaq.State):
+        qubits = cudaq.qvector(state)
+
+    state = cudaq.State.from_data(
+        np.array([1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.], dtype=complex))
+
+    counts = cudaq.sample(kernel, state)
+    assert "00" in counts
+    assert "10" in counts
+    assert len(counts) == 2
+
+    synthesized = cudaq.synthesize(kernel, state)
+    counts = cudaq.sample(synthesized)
+    assert '00' in counts
+    assert '10' in counts
+    assert len(counts) == 2
+
+
+def test_quantinuum_state_synthesis():
+
+    @cudaq.kernel
+    def init(n: int):
+        q = cudaq.qvector(n)
+        x(q[0])
+
+    @cudaq.kernel
+    def kernel(s: cudaq.State):
+        q = cudaq.qvector(s)
+        x(q[1])
+
+    s = cudaq.get_state(init, 2)
+    s = cudaq.get_state(kernel, s)
+    counts = cudaq.sample(kernel, s)
+    assert '10' in counts
+    assert len(counts) == 1
+
+
+def test_exp_pauli():
+
+    @cudaq.kernel
+    def test():
+        q = cudaq.qvector(2)
+        exp_pauli(1.0, q, "XX")
+
+    counts = cudaq.sample(test)
+    assert '00' in counts
+    assert '11' in counts
+    assert not '01' in counts
+    assert not '10' in counts
 
 
 # leave for gdb debugging

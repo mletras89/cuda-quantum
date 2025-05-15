@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -8,6 +8,7 @@
 
 // REQUIRES: c++20
 // clang-format off
+// RUN: nvq++ %cpp_std --target infleqtion      --emulate %s -o %t && %t | FileCheck %s
 // RUN: nvq++ --target anyon                    --emulate %s -o %t && %t | FileCheck %s
 // RUN: nvq++ --target ionq                     --emulate %s -o %t && %t | FileCheck %s
 // 2 different IQM machines for 2 different topologies
@@ -15,6 +16,7 @@
 // RUN: nvq++ --target iqm --iqm-machine Apollo --emulate %s -o %t && %t | FileCheck %s
 // RUN: nvq++ --target oqc                      --emulate %s -o %t && %t | FileCheck %s
 // RUN: nvq++ --target quantinuum               --emulate %s -o %t && %t | FileCheck %s
+// RUN: if %braket_avail; then nvq++ --target braket --emulate %s -o %t && %t | FileCheck %s; fi
 // clang-format on
 
 #include <cudaq.h>
@@ -35,9 +37,9 @@ struct ansatz {
 int main() {
 
   // Build up your spin op algebraically
-  using namespace cudaq::spin;
-  cudaq::spin_op h = 5.907 - 2.1433 * x(0) * x(1) - 2.1433 * y(0) * y(1) +
-                     .21829 * z(0) - 6.125 * z(1);
+   cudaq::spin_op h = 5.907 - 2.1433 * cudaq::spin_op::x(0) * cudaq::spin_op::x(1) - 
+                     2.1433 * cudaq::spin_op::y(0) * cudaq::spin_op::y(1) +
+                     .21829 * cudaq::spin_op::z(0) - 6.125 * cudaq::spin_op::z(1);
 
   // Make repeatable for shots-based emulation
   cudaq::set_random_seed(13);
@@ -49,7 +51,7 @@ int main() {
   return 0;
 }
 
-// Note: seeds 2 and 12 will push this to -2 instead of -1. All all other
-// seeds in 1-100 range will be -1.x.
+// Note: seeds 2 and 12 will push this to -2 instead of -1. All other seeds in
+// 1-100 range will be -1.x.
 
 // CHECK: Energy is -1.

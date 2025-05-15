@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -9,7 +9,8 @@
 #include "PassDetails.h"
 #include "cudaq/Optimizer/Builder/Intrinsics.h"
 #include "cudaq/Optimizer/CodeGen/Passes.h"
-#include "cudaq/Optimizer/CodeGen/Peephole.h"
+#include "cudaq/Optimizer/CodeGen/QIRFunctionNames.h"
+#include "cudaq/Optimizer/CodeGen/QIROpaqueStructTypes.h"
 #include "cudaq/Optimizer/Dialect/Quake/QuakeOps.h"
 #include "cudaq/Todo.h"
 #include "nlohmann/json.hpp"
@@ -48,9 +49,12 @@ struct VerifyQIRProfilePass
     bool isBaseProfile = convertTo.getValue() == "qir-base";
     func.walk([&](Operation *op) {
       if (auto call = dyn_cast<LLVM::CallOp>(op)) {
-        auto funcName = call.getCalleeAttr().getValue();
+        auto funcNameAttr = call.getCalleeAttr();
+        if (!funcNameAttr)
+          return WalkResult::advance();
+        auto funcName = funcNameAttr.getValue();
         if (!funcName.startswith("__quantum_") ||
-            funcName.equals(cudaq::opt::QIRCustomOp)) {
+            funcName == cudaq::opt::QIRCustomOp) {
           call.emitOpError("unexpected call in QIR base profile");
           passFailed = true;
           return WalkResult::advance();

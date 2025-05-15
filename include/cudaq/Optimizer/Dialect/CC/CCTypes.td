@@ -1,5 +1,5 @@
 /********************************************************** -*- tablegen -*- ***
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -83,6 +83,7 @@ def cc_StructType : CCType<"Struct", "struct",
   );
 
   let hasCustomAssemblyFormat = 1;
+  let genVerifyDecl = 1;
 
   let builders = [
     TypeBuilder<(ins CArg<"llvm::StringRef">:$name,
@@ -119,7 +120,12 @@ def cc_StructType : CCType<"Struct", "struct",
   ];
 
   let extraClassDeclaration = [{
+    // O(1)
     bool isEmpty() const { return getMembers().empty(); }
+
+    // O(n)
+    std::size_t getNumMembers() const { return getMembers().size(); }
+
     Type getMember(unsigned position) { return getMembers()[position]; }
   }];
 }
@@ -149,6 +155,7 @@ def cc_ArrayType : CCType<"Array", "array"> {
   );
 
   let hasCustomAssemblyFormat = 1;
+  let genVerifyDecl = 1;
 
   let extraClassDeclaration = [{
     using SizeType = std::int64_t;
@@ -194,6 +201,30 @@ def cc_CallableType : CCType<"Callable", "callable"> {
   }];
 }
 
+def cc_IndirectCallableType : CCType<"IndirectCallable", "indirect_callable"> {
+  let summary = "Proxy for cudaq::qkernel.";
+  let description = [{
+    An entry-point kernel may take a reference to another kernel as an argument.
+    The passed kernel may be entirely opaque at compile-time with its definition
+    present in some other compilation module.
+
+    It is on the programmer to use the cudaq::qkernel type. This wrapper class
+    is very much like std::function, but it extends that functionality with some
+    extra information for the runtime to be able to "link" the distinct kernels
+    on the device side and provide, for example, LTO at JIT compile time.
+  }];
+
+  let parameters = (ins "mlir::FunctionType":$signature);
+
+  let assemblyFormat = "`<` $signature `>`";
+
+  let builders = [
+    TypeBuilderWithInferredContext<(ins "mlir::FunctionType":$signature), [{
+      return Base::get(signature.getContext(), signature);
+    }]>
+  ];
+}
+
 //===----------------------------------------------------------------------===//
 // StdVectorType - implemented as a span
 //===----------------------------------------------------------------------===//
@@ -219,6 +250,8 @@ def cc_StdVectorType : CCType<"Stdvec", "stdvec", [],
   let parameters = (ins "mlir::Type":$elementType);
 
   let assemblyFormat = "`<` qualified($elementType) `>`";
+
+  let genVerifyDecl = 1;
 
   let builders = [
     TypeBuilderWithInferredContext<(ins "mlir::Type":$elementType), [{
@@ -255,30 +288,8 @@ def cc_CharSpanType
   }];
 }
 
-def IsSpanLikePred : CPred<"$_self.isa<cudaq::cc::SpanLikeType>()">;
+def IsSpanLikePred : CPred<"isa<cudaq::cc::SpanLikeType>($_self)">;
 def SpanningType : Type<IsSpanLikePred, "dynamic length type">;
-
-//===----------------------------------------------------------------------===//
-// StateType
-//===----------------------------------------------------------------------===//
-
-def cc_StateType : CCType<"State", "state"> {
-  let summary = "Proxy for the cudaq::state class.";
-  let description = [{
-    The cudaq::state class is an abstraction for any data that may be used to
-    describe the initial state of a set of qubits. It would typically be used
-    in a simulation environment.
-
-    The CUDA-Q runtime will implement an ABI of intrinsic functions for the
-    compiler generated code to interface with this information in a generic
-    manner.
-
-    There are no legal operations in Quake/CC on a value of type `!cc.state`.
-    Only pointers to such values should exist in the IR for the purposes of
-    passing references to state objects to runtime functions at codegen.
-  }];
-  let genStorageClass = 0;
-}
 
 def AnyStateInitLike : TypeConstraint<cc_PointerType.predicate,
                          "state initializer types">;

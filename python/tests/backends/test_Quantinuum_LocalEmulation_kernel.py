@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -14,8 +14,18 @@ import numpy as np
 from typing import List
 
 
-def assert_close(got) -> bool:
-    return got < -1.5 and got > -1.9
+def requires_openfermion():
+    open_fermion_found = True
+    try:
+        import openfermion, openfermionpyscf
+    except:
+        open_fermion_found = False
+    return pytest.mark.skipif(not open_fermion_found,
+                              reason=f"openfermion is not installed")
+
+
+def assert_close(want, got, tolerance=1.0e-1) -> bool:
+    return abs(want - got) < tolerance
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -85,13 +95,26 @@ def test_quantinuum_observe():
 
     # Run the observe task on quantinuum synchronously
     res = cudaq.observe(ansatz, hamiltonian, .59, shots_count=100000)
-    assert assert_close(res.expectation())
+    assert assert_close(-1.7, res.expectation())
 
     # Launch it asynchronously, enters the job into the queue
     future = cudaq.observe_async(ansatz, hamiltonian, .59, shots_count=100000)
     # Retrieve the results (since we're emulating)
     res = future.get()
-    assert assert_close(res.expectation())
+    assert assert_close(-1.7, res.expectation())
+
+
+def test_observe():
+    cudaq.set_random_seed(13)
+
+    @cudaq.kernel
+    def ansatz():
+        q = cudaq.qvector(1)
+
+    molecule = 5.0 - 1.0 * spin.x(0)
+    res = cudaq.observe(ansatz, molecule, shots_count=10000)
+    print(res.expectation())
+    assert assert_close(5.0, res.expectation())
 
 
 def test_quantinuum_exp_pauli():
@@ -111,13 +134,13 @@ def test_quantinuum_exp_pauli():
 
     # Run the observe task on quantinuum synchronously
     res = cudaq.observe(ansatz, hamiltonian, .59, shots_count=100000)
-    assert assert_close(res.expectation())
+    assert assert_close(-1.7, res.expectation())
 
     # Launch it asynchronously, enters the job into the queue
     future = cudaq.observe_async(ansatz, hamiltonian, .59, shots_count=100000)
     # Retrieve the results (since we're emulating)
     res = future.get()
-    assert assert_close(res.expectation())
+    assert assert_close(-1.7, res.expectation())
 
 
 def test_u3_emulatation():
@@ -166,7 +189,7 @@ def test_quantinuum_state_preparation():
     assert not '111' in counts
 
 
-def test_quantinuum_state_synthesis():
+def test_quantinuum_state_synthesis_from_simulator():
 
     @cudaq.kernel
     def kernel(state: cudaq.State):
@@ -175,12 +198,81 @@ def test_quantinuum_state_synthesis():
     state = cudaq.State.from_data(
         np.array([1. / np.sqrt(2.), 1. / np.sqrt(2.), 0., 0.], dtype=complex))
 
-    with pytest.raises(RuntimeError) as e:
-        counts = cudaq.sample(kernel, state)
-    assert 'Could not successfully apply quake-synth.' in repr(e)
+    counts = cudaq.sample(kernel, state)
+    assert "00" in counts
+    assert "10" in counts
+    assert len(counts) == 2
+
+    synthesized = cudaq.synthesize(kernel, state)
+    counts = cudaq.sample(synthesized)
+    assert '00' in counts
+    assert '10' in counts
+    assert len(counts) == 2
 
 
-def test_arbitrary_unitary_synthesis():
+def test_quantinuum_state_synthesis():
+
+    @cudaq.kernel
+    def init(n: int):
+        q = cudaq.qvector(n)
+        x(q[0])
+
+    @cudaq.kernel
+    def kernel(s: cudaq.State):
+        q = cudaq.qvector(s)
+        x(q[1])
+
+    s = cudaq.get_state(init, 2)
+    s = cudaq.get_state(kernel, s)
+    counts = cudaq.sample(kernel, s)
+    assert '10' in counts
+    assert len(counts) == 1
+
+
+def test_exp_pauli():
+
+    @cudaq.kernel
+    def test():
+        q = cudaq.qvector(2)
+        exp_pauli(1.0, q, "XX")
+
+    counts = cudaq.sample(test)
+    assert '00' in counts
+    assert '11' in counts
+    assert not '01' in counts
+    assert not '10' in counts
+
+
+def test_exp_pauli_param():
+
+    @cudaq.kernel
+    def test_param(w: cudaq.pauli_word):
+        q = cudaq.qvector(2)
+        exp_pauli(1.0, q, w)
+
+    counts = cudaq.sample(test_param, cudaq.pauli_word("XX"))
+    assert '00' in counts
+    assert '11' in counts
+    assert not '01' in counts
+    assert not '10' in counts
+
+
+def test_list_complex_param():
+
+    @cudaq.kernel
+    def kernel(coefficients: list[complex]):
+        q = cudaq.qvector(2)
+        for i in range(len(coefficients)):
+            exp_pauli(coefficients[i].real, q, "XX")
+
+    counts = cudaq.sample(kernel, [10. + 0.j, 30. + 0.j])
+    assert "00" in counts
+    assert "11" in counts
+    assert not '01' in counts
+    assert not '10' in counts
+
+
+def test_1q_unitary_synthesis():
 
     cudaq.register_operation("custom_h",
                              1. / np.sqrt(2.) * np.array([1, 1, 1, -1]))
@@ -192,7 +284,6 @@ def test_arbitrary_unitary_synthesis():
         custom_x(qubit)
 
     counts = cudaq.sample(basic_x)
-    counts.dump()
     assert len(counts) == 1 and "1" in counts
 
     @cudaq.kernel
@@ -201,7 +292,6 @@ def test_arbitrary_unitary_synthesis():
         custom_h(qubit)
 
     counts = cudaq.sample(basic_h)
-    counts.dump()
     assert "0" in counts and "1" in counts
 
     @cudaq.kernel
@@ -211,7 +301,6 @@ def test_arbitrary_unitary_synthesis():
         custom_x.ctrl(qubits[0], qubits[1])
 
     counts = cudaq.sample(bell)
-    counts.dump()
     assert len(counts) == 2
     assert "00" in counts and "11" in counts
 
@@ -227,8 +316,114 @@ def test_arbitrary_unitary_synthesis():
         h(q)
 
     counts = cudaq.sample(kernel)
-    counts.dump()
     assert counts["1"] == 1000
+
+
+def test_2q_unitary_synthesis():
+
+    cudaq.register_operation(
+        "custom_cnot",
+        np.array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]))
+
+    @cudaq.kernel
+    def bell_pair():
+        qubits = cudaq.qvector(2)
+        h(qubits[0])
+        custom_cnot(qubits[0], qubits[1])
+
+    counts = cudaq.sample(bell_pair)
+    assert len(counts) == 2
+    assert "00" in counts and "11" in counts
+
+    cudaq.register_operation(
+        "custom_cz", np.array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                               -1]))
+
+    @cudaq.kernel
+    def ctrl_z_kernel():
+        qubits = cudaq.qvector(5)
+        controls = cudaq.qvector(2)
+        custom_cz(qubits[1], qubits[0])
+        x(qubits[2])
+        custom_cz(qubits[3], qubits[2])
+        x(controls)
+
+    counts = cudaq.sample(ctrl_z_kernel)
+    assert counts["0010011"] == 1000
+
+
+def test_3q_unitary_synthesis():
+    cudaq.register_operation(
+        "toffoli",
+        np.array([
+            1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+            0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0
+        ]))
+
+    @cudaq.kernel
+    def test_toffoli():
+        q = cudaq.qvector(3)
+        x(q)
+        toffoli(q[0], q[1], q[2])
+
+    with pytest.raises(RuntimeError):
+        cudaq.sample(test_toffoli)
+
+
+@requires_openfermion()
+def test_observe_chemistry():
+    geometry = [('H', (0., 0., 0.)), ('H', (0., 0., .7474))]
+    molecule, data = cudaq.chemistry.create_molecular_hamiltonian(
+        geometry, 'sto-3g', 1, 0)
+
+    qubit_count = data.n_orbitals * 2
+
+    @cudaq.kernel
+    def kernel(thetas: list[float]):
+        qubits = cudaq.qvector(qubit_count)
+
+    result = cudaq.observe(kernel, molecule, [.0, .0, .0, .0], shots_count=1000)
+
+    expectation = result.expectation()
+    assert_close(expectation, 0.707)
+
+
+def test_capture_array():
+    arr = np.array([1., 0], dtype=np.complex128)
+
+    @cudaq.kernel
+    def kernel():
+        q = cudaq.qvector(arr)
+
+    counts = cudaq.sample(kernel)
+    assert len(counts) == 1
+    assert "0" in counts
+
+    arr = np.array([0., 1], dtype=np.complex128)
+
+    @cudaq.kernel
+    def kernel():
+        q = cudaq.qvector(arr)
+
+    counts = cudaq.sample(kernel)
+    assert len(counts) == 1
+    assert "1" in counts
+
+
+def test_capture_state():
+    s = cudaq.State.from_data(np.array([1., 0], dtype=np.complex128))
+
+    @cudaq.kernel
+    def kernel():
+        q = cudaq.qvector(s)
+
+    with pytest.raises(
+            RuntimeError,
+            match=
+            "captured states are not supported on quantum hardware or remote simulators"
+    ):
+        counts = cudaq.sample(kernel)
 
 
 # leave for gdb debugging

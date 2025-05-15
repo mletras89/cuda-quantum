@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -29,11 +29,6 @@ namespace quake {
 mlir::Value createConstantAlloca(mlir::PatternRewriter &builder,
                                  mlir::Location loc, mlir::OpResult result,
                                  mlir::ValueRange args);
-
-mlir::Value createSizedSubVeqOp(mlir::PatternRewriter &builder,
-                                mlir::Location loc, mlir::OpResult result,
-                                mlir::Value inVec, mlir::Value lo,
-                                mlir::Value hi);
 
 void getResetEffectsImpl(
     mlir::SmallVectorImpl<
@@ -73,7 +68,7 @@ void genericOpPrinter(mlir::OpAsmPrinter &_odsPrinter, mlir::Operation *op,
 // Is \p op in the Quake dialect?
 inline bool isQuakeOperation(mlir::Operation *op) {
   if (auto *dialect = op->getDialect())
-    return dialect->getNamespace().equals("quake");
+    return dialect->getNamespace() == "quake";
   return false;
 }
 

@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -40,18 +40,28 @@ protected:
 public:
   template <typename T>
   void addArgument(const T &arg) {
-    if constexpr (std::is_pointer<std::decay_t<T>>::value) {
-      args.push_back(const_cast<void *>(static_cast<const void *>(arg)));
-      deleters.push_back([](void *ptr) {});
-    } else if constexpr (std::is_copy_constructible<std::decay_t<T>>::value) {
+    if constexpr (std::is_pointer_v<std::decay_t<T>>) {
+      if constexpr (std::is_copy_constructible_v<
+                        std::remove_pointer_t<std::decay_t<T>>>) {
+        auto ptr = new std::remove_pointer_t<std::decay_t<T>>(*arg);
+        args.push_back(ptr);
+        deleters.push_back([](void *ptr) {
+          delete static_cast<std::remove_pointer_t<std::decay_t<T>> *>(ptr);
+        });
+      } else {
+        throw std::invalid_argument(
+            "Unsupported argument type: only pointers to copy-constructible "
+            "types and copy-constructible types are supported.");
+      }
+    } else if constexpr (std::is_copy_constructible_v<std::decay_t<T>>) {
       auto *ptr = new std::decay_t<T>(arg);
       args.push_back(ptr);
       deleters.push_back(
           [](void *ptr) { delete static_cast<std::decay_t<T> *>(ptr); });
     } else {
       throw std::invalid_argument(
-          "Unsupported argument type: only pointers and "
-          "copy-constructible types are supported.");
+          "Unsupported argument type: only pointers to copy-constructible "
+          "types and copy-constructible types are supported.");
     }
   }
 
@@ -68,12 +78,13 @@ public:
     (addArgument(args), ...);
   }
   RemoteSimulationState() = default;
-  virtual ~RemoteSimulationState();
+  virtual ~RemoteSimulationState() override;
   /// @brief Triggers remote execution to resolve the state data.
   virtual void execute() const;
 
   /// @brief Helper to retrieve (kernel name, `args` pointers)
-  virtual std::pair<std::string, std::vector<void *>> getKernelInfo() const;
+  virtual std::optional<std::pair<std::string, std::vector<void *>>>
+  getKernelInfo() const override;
 
   /// @brief Return the number of qubits this state represents.
   std::size_t getNumQubits() const override;

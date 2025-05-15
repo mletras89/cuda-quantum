@@ -1,5 +1,5 @@
 # ============================================================================ #
-# Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                   #
+# Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                   #
 # All rights reserved.                                                         #
 #                                                                              #
 # This source code and the accompanying materials are made available under     #
@@ -11,8 +11,8 @@ get_filename_component(CUDAQ_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 include(CMakeFindDependencyMacro)
 list(APPEND CMAKE_MODULE_PATH "${CUDAQ_CMAKE_DIR}")
 
-set (CUDAQSpin_DIR "${CUDAQ_CMAKE_DIR}")
-find_dependency(CUDAQSpin REQUIRED)
+set (CUDAQOperator_DIR "${CUDAQ_CMAKE_DIR}")
+find_dependency(CUDAQOperator REQUIRED)
 
 set (CUDAQCommon_DIR "${CUDAQ_CMAKE_DIR}")
 find_dependency(CUDAQCommon REQUIRED)
@@ -28,6 +28,9 @@ find_dependency(CUDAQNlopt REQUIRED)
 
 set (CUDAQEnsmallen_DIR "${CUDAQ_CMAKE_DIR}")
 find_dependency(CUDAQEnsmallen REQUIRED)
+
+set (CUDAQPythonInterop_DIR "${CUDAQ_CMAKE_DIR}")
+find_dependency(CUDAQPythonInterop REQUIRED)
 
 get_filename_component(PARENT_DIRECTORY ${CUDAQ_CMAKE_DIR} DIRECTORY)
 get_filename_component(CUDAQ_LIBRARY_DIR ${PARENT_DIRECTORY} DIRECTORY)
@@ -103,10 +106,17 @@ set_target_properties(cudaq::cudaq-qpp-cpu-target PROPERTIES
 
 # QPP CPU DensityMatrix Target
 add_library(cudaq::cudaq-qpp-density-matrix-cpu-target SHARED IMPORTED)
-  set_target_properties(cudaq::cudaq-qpp-density-matrix-cpu-target PROPERTIES
-    IMPORTED_LOCATION "${CUDAQ_LIBRARY_DIR}/libnvqir-dm${CMAKE_SHARED_LIBRARY_SUFFIX}"
-    IMPORTED_SONAME "libnvqir-dm${CMAKE_SHARED_LIBRARY_SUFFIX}"
-    IMPORTED_LINK_INTERFACE_LIBRARIES "cudaq::cudaq-platform-default;cudaq::cudaq-em-default")
+set_target_properties(cudaq::cudaq-qpp-density-matrix-cpu-target PROPERTIES
+  IMPORTED_LOCATION "${CUDAQ_LIBRARY_DIR}/libnvqir-dm${CMAKE_SHARED_LIBRARY_SUFFIX}"
+  IMPORTED_SONAME "libnvqir-dm${CMAKE_SHARED_LIBRARY_SUFFIX}"
+  IMPORTED_LINK_INTERFACE_LIBRARIES "cudaq::cudaq-platform-default;cudaq::cudaq-em-default")
+
+# Stim Target
+add_library(cudaq::cudaq-stim-target SHARED IMPORTED)
+set_target_properties(cudaq::cudaq-stim-target PROPERTIES
+  IMPORTED_LOCATION "${CUDAQ_LIBRARY_DIR}/libnvqir-stim${CMAKE_SHARED_LIBRARY_SUFFIX}"
+  IMPORTED_SONAME "libnvqir-stim${CMAKE_SHARED_LIBRARY_SUFFIX}"
+  IMPORTED_LINK_INTERFACE_LIBRARIES "cudaq::cudaq-platform-default;cudaq::cudaq-em-default")
 # -------------------------
 
 if(NOT TARGET cudaq::cudaq)

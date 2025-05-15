@@ -104,7 +104,7 @@ Quantum Phase Estimation
 
 .. tab:: C++ 
 
-  .. literalinclude:: ../../examples/cpp/algorithms/phase_estimation.cpp
+  .. literalinclude:: ../../applications/cpp/phase_estimation.cpp
       :language: cpp
 
 .. tab:: Python 
@@ -183,9 +183,9 @@ Deuteron Binding Energy Parameter Sweep
       };
 
       int main() {
-        using namespace cudaq::spin;
-        cudaq::spin_op h = 5.907 - 2.1433 * x(0) * x(1) - 2.1433 * y(0) * y(1) +
-                    .21829 * z(0) - 6.125 * z(1);
+        cudaq::spin_op h = 5.907 - 2.1433 * cudaq::spin_op::x(0) * cudaq::spin_op::x(1) - 
+                           2.1433 * cudaq::spin_op::y(0) * cudaq::spin_op::y(1) +
+                           .21829 * cudaq::spin_op::z(0) - 6.125 * cudaq::spin_op::z(1);
     
         // Perform parameter sweep for deuteron N=2 Hamiltonian
         const auto param_space = cudaq::linspace(-M_PI, M_PI, 25);
@@ -227,7 +227,7 @@ Grover's Algorithm
 
 .. tab:: C++ 
 
-  .. literalinclude:: ../../examples/cpp/algorithms/grover.cpp
+  .. literalinclude:: ../../applications/cpp/grover.cpp
       :language: cpp
 
 .. tab:: Python 
@@ -264,7 +264,7 @@ Grover's Algorithm
 Iterative Phase Estimation
 --------------------------
 
-.. literalinclude:: ../../examples/cpp/other/iterative_qpe.cpp
+.. literalinclude:: ../../applications/cpp/iterative_qpe.cpp
     :language: cpp
     :start-after: [Begin Documentation]
     :end-before: [End Documentation]

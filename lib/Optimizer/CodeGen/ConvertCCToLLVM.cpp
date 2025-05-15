@@ -1,17 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
  * the terms of the Apache License 2.0 which accompanies this distribution.    *
  ******************************************************************************/
 
-#include "CodeGenDialect.h"
 #include "cudaq/Optimizer/Builder/Intrinsics.h"
 #include "cudaq/Optimizer/CodeGen/CCToLLVM.h"
+#include "cudaq/Optimizer/CodeGen/CodeGenDialect.h"
 #include "cudaq/Optimizer/CodeGen/Passes.h"
 #include "cudaq/Optimizer/Dialect/CC/CCOps.h"
 #include "cudaq/Optimizer/Dialect/CC/CCTypes.h"
+#include "cudaq/Optimizer/Dialect/Quake/QuakeTypes.h"
 #include "llvm/Support/Debug.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ComplexToLLVM/ComplexToLLVM.h"
@@ -22,7 +23,6 @@
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
 #include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
-#include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
 #include "mlir/Target/LLVMIR/TypeToLLVM.h"
 
@@ -42,6 +42,9 @@ LLVM::LLVMStructType cudaq::opt::lambdaAsPairOfPointers(MLIRContext *context) {
 }
 
 void cudaq::opt::populateCCTypeConversions(LLVMTypeConverter *converter) {
+  converter->addConversion([](cc::IndirectCallableType type) {
+    return IntegerType::get(type.getContext(), 64);
+  });
   converter->addConversion([](cc::CallableType type) {
     return lambdaAsPairOfPointers(type.getContext());
   });
@@ -70,7 +73,7 @@ void cudaq::opt::populateCCTypeConversions(LLVMTypeConverter *converter) {
     return LLVM::LLVMArrayType::get(eleTy, type.getSize());
   });
   converter->addConversion(
-      [](cc::StateType type) { return factory::stateImplType(type); });
+      [](quake::StateType type) { return factory::stateImplType(type); });
   converter->addConversion([converter](cc::StructType type) -> Type {
     SmallVector<Type> members;
     for (auto t : type.getMembers())
@@ -118,7 +121,6 @@ struct CCToLLVM : public cudaq::opt::impl::CCToLLVMBase<CCToLLVM> {
     arith::populateArithToLLVMConversionPatterns(ccTypeConverter, patterns);
     populateMathToLLVMConversionPatterns(ccTypeConverter, patterns);
 
-    populateSCFToControlFlowConversionPatterns(patterns);
     cf::populateControlFlowToLLVMConversionPatterns(ccTypeConverter, patterns);
     populateFuncToLLVMConversionPatterns(ccTypeConverter, patterns);
     cudaq::opt::populateCCToLLVMPatterns(ccTypeConverter, patterns);

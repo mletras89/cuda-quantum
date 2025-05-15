@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -35,7 +35,7 @@ public:
 namespace cudaq::cc {
 
 inline bool SpanLikeType::classof(mlir::Type type) {
-  return type.isa<StdvecType, CharspanType>();
+  return mlir::isa<StdvecType, CharspanType>(type);
 }
 
 /// Return true if and only if \p ty has dynamic extent. This is a recursive

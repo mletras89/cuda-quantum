@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -335,18 +335,104 @@ struct ExpPauliDecomposition : public OpRewritePattern<quake::ExpPauliOp> {
   LogicalResult matchAndRewrite(quake::ExpPauliOp expPauliOp,
                                 PatternRewriter &rewriter) const override {
     auto loc = expPauliOp.getLoc();
-    auto qubits = expPauliOp.getQubits();
+    auto module = expPauliOp->getParentOfType<ModuleOp>();
+    auto qubits = expPauliOp.getTarget();
     auto theta = expPauliOp.getParameter();
     auto pauliWord = expPauliOp.getPauli();
+    auto stringTy = pauliWord.getType();
+    std::string pauliWordString;
+
+    if (expPauliOp.isAdj())
+      theta = rewriter.create<arith::NegFOp>(loc, theta);
+
+    std::optional<StringRef> optPauliWordStr;
+
+    if (isa<cudaq::cc::PointerType>(stringTy)) {
+      if (auto defOp =
+              pauliWord.getDefiningOp<cudaq::cc::CreateStringLiteralOp>())
+        optPauliWordStr = defOp.getStringLiteral();
+    } else {
+      if (auto charSpanTy = dyn_cast<cudaq::cc::CharspanType>(stringTy)) {
+        if (auto load = pauliWord.getDefiningOp<cudaq::cc::LoadOp>()) {
+          // Look for a matching StoreOp for the LoadOp. This search isn't
+          // necessarily efficient or exhaustive. Instead of using dominance
+          // information, we scan the current basic block looking for the
+          // nearest StoreOp before the LoadOp. If one is found, we forward the
+          // stored value.
+          auto ptrVal = load.getPtrvalue();
+          auto storeVal = [&]() -> Value {
+            SmallVector<Operation *> stores;
+            for (auto *use : ptrVal.getUsers()) {
+              if (auto store = dyn_cast<cudaq::cc::StoreOp>(use)) {
+                if (store.getPtrvalue() == ptrVal &&
+                    store->getBlock() == load->getBlock())
+                  stores.push_back(store.getOperation());
+              }
+            }
+            if (stores.empty())
+              return {};
+            for (Operation *op = load.getOperation()->getPrevNode(); op;
+                 op = op->getPrevNode()) {
+              auto iter = std::find(stores.begin(), stores.end(), op);
+              if (iter == stores.end())
+                continue;
+              return cast<cudaq::cc::StoreOp>(*iter).getValue();
+            }
+            return {};
+          }();
+          if (storeVal)
+            pauliWord = storeVal;
+        }
+        if (auto vecInit = pauliWord.getDefiningOp<cudaq::cc::StdvecInitOp>()) {
+          auto addrOp = vecInit.getOperand(0);
+          if (auto cast = addrOp.getDefiningOp<cudaq::cc::CastOp>())
+            addrOp = cast.getOperand();
+          if (auto addr = addrOp.getDefiningOp<cudaq::cc::AddressOfOp>()) {
+            // Get the pauli word string from a constant global string generated
+            // during argument synthesis.
+            auto globalName = addr.getGlobalName();
+            auto symbol = module.lookupSymbol(globalName);
+            if (auto global = dyn_cast<LLVM::GlobalOp>(symbol)) {
+              auto attr = global.getValue();
+              auto strAttr = cast<mlir::StringAttr>(attr.value());
+              optPauliWordStr = strAttr.getValue();
+            } else if (auto global = dyn_cast<cudaq::cc::GlobalOp>(symbol)) {
+              auto attr = global.getValue();
+              auto elementsAttr = cast<mlir::ElementsAttr>(attr.value());
+              auto eleTy = elementsAttr.getElementType();
+              auto values = elementsAttr.getValues<mlir::Attribute>();
+
+              pauliWordString.reserve(values.size());
+              for (auto it = values.begin(); it != values.end(); ++it) {
+                assert(isa<IntegerType>(eleTy));
+                char v = static_cast<char>(cast<IntegerAttr>(*it).getInt());
+                pauliWordString.push_back(v);
+              }
+              optPauliWordStr = StringRef(pauliWordString);
+            }
+          } else if (auto lit = addrOp.getDefiningOp<
+                                cudaq::cc::CreateStringLiteralOp>()) {
+            // Get the pauli word string if it was a literal wrapped in a stdvec
+            // structure.
+            optPauliWordStr = lit.getStringLiteral();
+          }
+        }
+      }
+    }
 
     // Assert that we have a constant known pauli word
-    auto defOp = pauliWord.getDefiningOp<cudaq::cc::CreateStringLiteralOp>();
-    if (!defOp)
-      return failure();
+    if (!optPauliWordStr.has_value())
+      return expPauliOp.emitOpError("cannot determine pauli word string");
+
+    auto pauliWordStr = optPauliWordStr.value();
+
+    // Remove optional last zero character
+    auto size = pauliWordStr.size();
+    if (size > 0 && pauliWordStr[size - 1] == '\0')
+      size--;
 
     SmallVector<Value> qubitSupport;
-    StringRef pauliWordStr = defOp.getStringLiteral();
-    for (std::size_t i = 0; i < pauliWordStr.size(); i++) {
+    for (std::size_t i = 0; i < size; i++) {
       Value index = rewriter.create<arith::ConstantIntOp>(loc, i, 64);
       Value qubitI = rewriter.create<quake::ExtractRefOp>(loc, qubits, index);
       if (pauliWordStr[i] != 'I')
@@ -420,6 +506,60 @@ struct R1ToRz : public OpRewritePattern<quake::R1Op> {
     rewriter.replaceOpWithNewOp<quake::RzOp>(
         r1Op, r1Op.isAdj(), r1Op.getParameters(), r1Op.getControls(),
         r1Op.getTargets());
+    return success();
+  }
+};
+
+// Naive mapping of R1 to U3
+// quake.r1(λ) [control] target
+// ───────────────────────────────────
+// quake.u3(0, 0, λ) [control] target
+struct R1ToU3 : public OpRewritePattern<quake::R1Op> {
+  using OpRewritePattern<quake::R1Op>::OpRewritePattern;
+
+  void initialize() { setDebugName("R1ToU3"); }
+
+  LogicalResult matchAndRewrite(quake::R1Op r1Op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = r1Op->getLoc();
+    Value zero = createConstant(loc, 0.0, rewriter.getF64Type(), rewriter);
+    std::array<Value, 3> parameters = {zero, zero, r1Op.getParameters()[0]};
+    rewriter.replaceOpWithNewOp<quake::U3Op>(
+        r1Op, r1Op.isAdj(), parameters, r1Op.getControls(), r1Op.getTargets());
+    return success();
+  }
+};
+
+// quake.r1<adj> (θ) target
+// ─────────────────────────────────
+// quake.r1(-θ) target
+struct R1AdjToR1 : public OpRewritePattern<quake::R1Op> {
+  using OpRewritePattern<quake::R1Op>::OpRewritePattern;
+
+  void initialize() { setDebugName("R1AdjToR1"); }
+
+  LogicalResult matchAndRewrite(quake::R1Op op,
+                                PatternRewriter &rewriter) const override {
+    if (!op.getControls().empty())
+      return failure();
+    if (!op.isAdj())
+      return failure();
+
+    // Op info
+    Location loc = op->getLoc();
+    Value target = op.getTarget();
+    Value angle = op.getParameter();
+    angle = rewriter.create<arith::NegFOp>(loc, angle);
+
+    // Necessary/Helpful constants
+    SmallVector<Value> noControls;
+    SmallVector<Value> parameters = {angle};
+
+    QuakeOperatorCreator qRewriter(rewriter);
+    qRewriter.create<quake::R1Op>(loc, parameters, noControls, target);
+
+    qRewriter.selectWiresAndReplaceUses(op, target);
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -1148,6 +1288,41 @@ struct RxToPhasedRx : public OpRewritePattern<quake::RxOp> {
   }
 };
 
+// quake.rx<adj> (θ) target
+// ─────────────────────────────────
+// quake.rx(-θ) target
+struct RxAdjToRx : public OpRewritePattern<quake::RxOp> {
+  using OpRewritePattern<quake::RxOp>::OpRewritePattern;
+
+  void initialize() { setDebugName("RxAdjToRx"); }
+
+  LogicalResult matchAndRewrite(quake::RxOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op.getControls().empty())
+      return failure();
+
+    if (!op.isAdj())
+      return failure();
+
+    // Op info
+    Location loc = op->getLoc();
+    Value target = op.getTarget();
+    Value angle = op.getParameter();
+    angle = rewriter.create<arith::NegFOp>(loc, angle);
+
+    // Necessary/Helpful constants
+    SmallVector<Value> noControls;
+    SmallVector<Value> parameters = {angle};
+
+    QuakeOperatorCreator qRewriter(rewriter);
+    qRewriter.create<quake::RxOp>(loc, parameters, noControls, target);
+
+    qRewriter.selectWiresAndReplaceUses(op, target);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 // RyOp decompositions
 //===----------------------------------------------------------------------===//
@@ -1227,6 +1402,41 @@ struct RyToPhasedRx : public OpRewritePattern<quake::RyOp> {
     SmallVector<Value> parameters = {angle, pi_2};
     QuakeOperatorCreator qRewriter(rewriter);
     qRewriter.create<quake::PhasedRxOp>(loc, parameters, noControls, target);
+
+    qRewriter.selectWiresAndReplaceUses(op, target);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+// quake.ry<adj> (θ) target
+// ─────────────────────────────────
+// quake.ry(-θ) target
+struct RyAdjToRy : public OpRewritePattern<quake::RyOp> {
+  using OpRewritePattern<quake::RyOp>::OpRewritePattern;
+
+  void initialize() { setDebugName("RyAdjToRy"); }
+
+  LogicalResult matchAndRewrite(quake::RyOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op.getControls().empty())
+      return failure();
+
+    if (!op.isAdj())
+      return failure();
+
+    // Op info
+    Location loc = op->getLoc();
+    Value target = op.getTarget();
+    Value angle = op.getParameter();
+    angle = rewriter.create<arith::NegFOp>(loc, angle);
+
+    // Necessary/Helpful constants
+    SmallVector<Value> noControls;
+    SmallVector<Value> parameters = {angle};
+
+    QuakeOperatorCreator qRewriter(rewriter);
+    qRewriter.create<quake::RyOp>(loc, parameters, noControls, target);
 
     qRewriter.selectWiresAndReplaceUses(op, target);
     rewriter.eraseOp(op);
@@ -1331,6 +1541,41 @@ struct RzToPhasedRx : public OpRewritePattern<quake::RzOp> {
   }
 };
 
+// quake.rz<adj> (θ) target
+// ─────────────────────────────────
+// quake.rz(-θ) target
+struct RzAdjToRz : public OpRewritePattern<quake::RzOp> {
+  using OpRewritePattern<quake::RzOp>::OpRewritePattern;
+
+  void initialize() { setDebugName("RzAdjToRz"); }
+
+  LogicalResult matchAndRewrite(quake::RzOp op,
+                                PatternRewriter &rewriter) const override {
+    if (!op.getControls().empty())
+      return failure();
+
+    if (!op.isAdj())
+      return failure();
+
+    // Op info
+    Location loc = op->getLoc();
+    Value target = op.getTarget();
+    Value angle = op.getParameter();
+    angle = rewriter.create<arith::NegFOp>(loc, angle);
+
+    // Necessary/Helpful constants
+    SmallVector<Value> noControls;
+    SmallVector<Value> parameters = {angle};
+
+    QuakeOperatorCreator qRewriter(rewriter);
+    qRewriter.create<quake::RzOp>(loc, parameters, noControls, target);
+
+    qRewriter.selectWiresAndReplaceUses(op, target);
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 // U3Op decompositions
 //===----------------------------------------------------------------------===//
@@ -1359,6 +1604,8 @@ struct U3ToRotations : public OpRewritePattern<quake::U3Op> {
 
     if (op.isAdj()) {
       theta = rewriter.create<arith::NegFOp>(loc, theta);
+      // swap the 2nd and 3rd parameter for correctness
+      std::swap(phi, lam);
       phi = rewriter.create<arith::NegFOp>(loc, phi);
       lam = rewriter.create<arith::NegFOp>(loc, lam);
     }
@@ -1413,15 +1660,20 @@ void cudaq::populateWithAllDecompositionPatterns(RewritePatternSet &patterns) {
     CR1ToCX,
     R1ToPhasedRx,
     R1ToRz,
+    R1ToU3,
+    R1AdjToR1,
     // RxOp patterns
     CRxToCX,
     RxToPhasedRx,
+    RxAdjToRx,
     // RyOp patterns
     CRyToCX,
     RyToPhasedRx,
+    RyAdjToRy,
     // RzOp patterns
     CRzToCX,
     RzToPhasedRx,
+    RzAdjToRz,
     // Swap
     SwapToCX,
     // U3Op

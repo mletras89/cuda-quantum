@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -20,7 +20,7 @@ static void launchVqeImpl(cudaq::ExecutionContext *executionContextPtr,
                           std::unique_ptr<cudaq::RemoteRuntimeClient> &m_client,
                           const std::string &m_simName, const std::string &name,
                           const void *kernelArgs, cudaq::gradient *gradient,
-                          cudaq::spin_op &H, cudaq::optimizer &optimizer,
+                          const cudaq::spin_op &H, cudaq::optimizer &optimizer,
                           const int n_params, const std::size_t shots) {
   auto *wrapper = reinterpret_cast<const cudaq::ArgWrapper *>(kernelArgs);
   auto m_module = wrapper->mod;
@@ -31,7 +31,7 @@ static void launchVqeImpl(cudaq::ExecutionContext *executionContextPtr,
 
   auto ctx = std::make_unique<cudaq::ExecutionContext>("observe", shots);
   ctx->kernelName = name;
-  ctx->spin = &H;
+  ctx->spin = cudaq::spin_op::canonicalize(H);
   if (shots > 0)
     ctx->shots = shots;
 
@@ -51,7 +51,8 @@ launchKernelImpl(cudaq::ExecutionContext *executionContextPtr,
                  std::unique_ptr<cudaq::RemoteRuntimeClient> &m_client,
                  const std::string &m_simName, const std::string &name,
                  void (*kernelFunc)(void *), void *args,
-                 std::uint64_t voidStarSize, std::uint64_t resultOffset) {
+                 std::uint64_t voidStarSize, std::uint64_t resultOffset,
+                 const std::vector<void *> &rawArgs) {
   auto *wrapper = reinterpret_cast<cudaq::ArgWrapper *>(args);
   auto m_module = wrapper->mod;
   auto callableNames = wrapper->callableNames;
@@ -118,7 +119,7 @@ public:
   virtual bool isEmulated() override { return true; }
 
   void launchVQE(const std::string &name, const void *kernelArgs,
-                 cudaq::gradient *gradient, cudaq::spin_op H,
+                 cudaq::gradient *gradient, const cudaq::spin_op &H,
                  cudaq::optimizer &optimizer, const int n_params,
                  const std::size_t shots) override {
     cudaq::info(
@@ -129,14 +130,19 @@ public:
                     kernelArgs, gradient, H, optimizer, n_params, shots);
   }
 
-  void launchKernel(const std::string &name, void (*kernelFunc)(void *),
-                    void *args, std::uint64_t voidStarSize,
-                    std::uint64_t resultOffset) override {
+  cudaq::KernelThunkResultType
+  launchKernel(const std::string &name, cudaq::KernelThunkType kernelFunc,
+               void *args, std::uint64_t voidStarSize,
+               std::uint64_t resultOffset,
+               const std::vector<void *> &rawArgs) override {
     cudaq::info("PyRemoteSimulatorQPU: Launch kernel named '{}' remote QPU {} "
                 "(simulator = {})",
                 name, qpu_id, m_simName);
     ::launchKernelImpl(getExecutionContextForMyThread(), m_client, m_simName,
-                       name, kernelFunc, args, voidStarSize, resultOffset);
+                       name, make_degenerate_kernel_type(kernelFunc), args,
+                       voidStarSize, resultOffset, rawArgs);
+    // TODO: Python should probably support return values too.
+    return {};
   }
 
   void launchKernel(const std::string &name,
@@ -164,7 +170,7 @@ public:
   virtual bool isEmulated() override { return true; }
 
   void launchVQE(const std::string &name, const void *kernelArgs,
-                 cudaq::gradient *gradient, cudaq::spin_op H,
+                 cudaq::gradient *gradient, const cudaq::spin_op &H,
                  cudaq::optimizer &optimizer, const int n_params,
                  const std::size_t shots) override {
     cudaq::info(
@@ -175,14 +181,19 @@ public:
                     kernelArgs, gradient, H, optimizer, n_params, shots);
   }
 
-  void launchKernel(const std::string &name, void (*kernelFunc)(void *),
-                    void *args, std::uint64_t voidStarSize,
-                    std::uint64_t resultOffset) override {
+  cudaq::KernelThunkResultType
+  launchKernel(const std::string &name, cudaq::KernelThunkType kernelFunc,
+               void *args, std::uint64_t voidStarSize,
+               std::uint64_t resultOffset,
+               const std::vector<void *> &rawArgs) override {
     cudaq::info("PyNvcfSimulatorQPU: Launch kernel named '{}' remote QPU {} "
                 "(simulator = {})",
                 name, qpu_id, m_simName);
     ::launchKernelImpl(getExecutionContextForMyThread(), m_client, m_simName,
-                       name, kernelFunc, args, voidStarSize, resultOffset);
+                       name, make_degenerate_kernel_type(kernelFunc), args,
+                       voidStarSize, resultOffset, rawArgs);
+    // TODO: Python should probably support return values too.
+    return {};
   }
 
   void launchKernel(const std::string &name,

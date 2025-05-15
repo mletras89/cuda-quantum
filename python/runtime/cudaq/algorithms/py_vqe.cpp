@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -139,7 +139,7 @@ pyVQE_remote_cpp(cudaq::quantum_platform &platform, py::object &kernel,
   auto [kernelName, kernelMod] = getKernelNameAndModule(kernel);
   auto ctx = std::make_unique<ExecutionContext>("observe", /*shots=*/0);
   ctx->kernelName = kernelName;
-  ctx->spin = &hamiltonian;
+  ctx->spin = cudaq::spin_op::canonicalize(hamiltonian);
   platform.set_exec_ctx(ctx.get());
 
   constexpr std::size_t startingArgIdx = 1;
@@ -165,8 +165,8 @@ pyVQE_remote_cpp(cudaq::quantum_platform &platform, py::object &kernel,
   std::vector<std::string> names;
   auto *wrapper = new cudaq::ArgWrapper{unwrap(kernelMod), names, kernelArgs};
 
-  platform.launchVQE(kernelName, wrapper, gradient, hamiltonian, optimizer,
-                     n_params, shots);
+  platform.launchVQE(kernelName, wrapper, gradient, ctx->spin.value(),
+                     optimizer, n_params, shots);
   platform.reset_exec_ctx();
   delete wrapper;
   if (kernelArgs)
@@ -210,7 +210,9 @@ pyVQE_remote(cudaq::quantum_platform &platform, py::object &kernel,
         VAR_NAME.get_type().attr("__name__").cast<std::string>())] =           \
         json.attr("loads")(VAR_NAME.attr("to_json")());                        \
   } while (0)
-  LOAD_VAR(hamiltonian);
+
+  auto spin = cudaq::spin_op::canonicalize(hamiltonian);
+  LOAD_VAR(spin);
   LOAD_VAR(optimizer);
   LOAD_VAR_NO_CAST(kernel);
   if (gradient)
@@ -236,7 +238,7 @@ pyVQE_remote(cudaq::quantum_platform &platform, py::object &kernel,
   os << "kernel=__kernel, ";
   if (gradient)
     os << "gradient_strategy=__gradient, ";
-  os << "spin_operator=__hamiltonian, ";
+  os << "spin_operator=__spin, ";
   os << "optimizer=__optimizer, ";
   os << "parameter_count=" << n_params << ", ";
   if (argumentMapper)
@@ -408,18 +410,27 @@ optimization_result pyVQE(py::object &kernel, cudaq::gradient &gradient,
 }
 
 void bindVQE(py::module &mod) {
+  // FIXME(OperatorCpp): Remove this when the operator class is implemented in
+  // C++
+  const auto convertToSpinOp = [](py::object &obj) -> cudaq::spin_op {
+    if (py::hasattr(obj, "_to_spinop"))
+      return obj.attr("_to_spinop")().cast<cudaq::spin_op>();
+    return obj.cast<cudaq::spin_op>();
+  };
+
   /// @brief Gradient-Free `cudaq.optimizer` overloads:
   mod.def(
       "vqe",
-      [](py::object &kernel, cudaq::spin_op &spin_operator,
-         cudaq::optimizer &optimizer, const int parameter_count,
-         const int shots) {
+      [&](py::object &kernel, py::object &spin_operator,
+          cudaq::optimizer &optimizer, const int parameter_count,
+          const int shots) {
         auto requires_grad = optimizer.requiresGradients();
         if (requires_grad) {
           std::runtime_error("Provided optimizer requires a gradient strategy "
                              "but none was given.\n");
         }
-        return pyVQE(kernel, spin_operator, optimizer, parameter_count, shots);
+        auto asSpinOp = convertToSpinOp(spin_operator);
+        return pyVQE(kernel, asSpinOp, optimizer, parameter_count, shots);
       },
       py::arg("kernel"), py::arg("spin_operator"), py::arg("optimizer"),
       py::arg("parameter_count"), py::arg("shots") = -1, "");
@@ -427,15 +438,16 @@ void bindVQE(py::module &mod) {
   // With a provided `argument_mapper`.
   mod.def(
       "vqe",
-      [](py::object &kernel, cudaq::spin_op &spin_operator,
-         cudaq::optimizer &optimizer, const int parameter_count,
-         py::function &argumentMapper, const int shots) {
+      [&](py::object &kernel, py::object &spin_operator,
+          cudaq::optimizer &optimizer, const int parameter_count,
+          py::function &argumentMapper, const int shots) {
         auto requires_grad = optimizer.requiresGradients();
         if (requires_grad) {
           std::runtime_error("Provided optimizer requires a gradient strategy "
                              "but none was given.\n");
         }
-        return pyVQE(kernel, spin_operator, optimizer, parameter_count,
+        auto asSpinOp = convertToSpinOp(spin_operator);
+        return pyVQE(kernel, asSpinOp, optimizer, parameter_count,
                      argumentMapper, shots);
       },
       py::arg("kernel"), py::arg("spin_operator"), py::arg("optimizer"),
@@ -445,11 +457,12 @@ void bindVQE(py::module &mod) {
   /// @brief Gradient based `cudaq.optimizers` overloads:
   mod.def(
       "vqe",
-      [](py::object &kernel, cudaq::gradient &gradient,
-         cudaq::spin_op &spin_operator, cudaq::optimizer &optimizer,
-         const int parameter_count, const int shots) {
-        return pyVQE(kernel, gradient, spin_operator, optimizer,
-                     parameter_count, shots);
+      [&](py::object &kernel, cudaq::gradient &gradient,
+          py::object &spin_operator, cudaq::optimizer &optimizer,
+          const int parameter_count, const int shots) {
+        auto asSpinOp = convertToSpinOp(spin_operator);
+        return pyVQE(kernel, gradient, asSpinOp, optimizer, parameter_count,
+                     shots);
       },
       py::arg("kernel"), py::arg("gradient_strategy"), py::arg("spin_operator"),
       py::arg("optimizer"), py::arg("parameter_count"), py::arg("shots") = -1,
@@ -458,12 +471,13 @@ void bindVQE(py::module &mod) {
   // With a provided `argument_mapper`.
   mod.def(
       "vqe",
-      [](py::object &kernel, cudaq::gradient &gradient,
-         cudaq::spin_op &spin_operator, cudaq::optimizer &optimizer,
-         const int parameter_count, py::function &argumentMapper,
-         const int shots) {
-        return pyVQE(kernel, gradient, spin_operator, optimizer,
-                     parameter_count, argumentMapper, shots);
+      [&](py::object &kernel, cudaq::gradient &gradient,
+          py::object &spin_operator, cudaq::optimizer &optimizer,
+          const int parameter_count, py::function &argumentMapper,
+          const int shots) {
+        auto asSpinOp = convertToSpinOp(spin_operator);
+        return pyVQE(kernel, gradient, asSpinOp, optimizer, parameter_count,
+                     argumentMapper, shots);
       },
       py::arg("kernel"), py::arg("gradient_strategy"), py::arg("spin_operator"),
       py::arg("optimizer"), py::arg("parameter_count"),

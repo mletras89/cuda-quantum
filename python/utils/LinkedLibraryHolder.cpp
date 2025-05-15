@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -477,7 +477,7 @@ void LinkedLibraryHolder::setTarget(
   setQuantumPlatformInternal(platform);
   currentTarget = targetName;
 
-  if ("photonics" == targetName) {
+  if ("orca-photonics" == targetName) {
     std::filesystem::path libPath =
         cudaqLibPath / fmt::format("libcudaq-em-photonics.{}", libSuffix);
     auto *em = getUniquePluginInstance<ExecutionManager>(

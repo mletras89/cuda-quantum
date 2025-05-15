@@ -23,23 +23,23 @@ Let's see the output of :code:`nvq++` in verbose mode. Consider a simple code li
 
 .. code-block:: console 
 
-    $ nvq++ simple.cpp -v --save-temps
+    $ nvq++ simple.cpp -v -save-temps
     
     cudaq-quake --emit-llvm-file simple.cpp -o simple.qke
-    cudaq-opt --pass-pipeline=builtin.module(canonicalize,lambda-lifting,canonicalize,apply-op-specialization,kernel-execution,inline{default-pipeline=func.func(indirect-to-direct-calls)},func.func(quake-add-metadata),device-code-loader{use-quake=1},expand-measurements,func.func(lower-to-cfg),canonicalize,cse) simple.qke -o simple.qke.LpsXpu
+    cudaq-opt --pass-pipeline=builtin.module(canonicalize,lambda-lifting,canonicalize,apply-op-specialization,kernel-execution,indirect-to-direct-calls,inline,func.func(quake-add-metadata),device-code-loader{use-quake=1},expand-measurements,func.func(lower-to-cfg),canonicalize,cse) simple.qke -o simple.qke.LpsXpu
     cudaq-translate --convert-to=qir simple.qke.LpsXpu -o simple.ll.p3De4L
     fixup-linkage.pl simple.qke simple.ll
     llc --relocation-model=pic --filetype=obj -O2 simple.ll.p3De4L -o simple.qke.o
     llc --relocation-model=pic --filetype=obj -O2 simple.ll -o simple.classic.o
     clang++ -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib64 -L/lib/x86_64-linux-gnu -L/lib64 -L/usr/lib/x86_64-linux-gnu -L/lib -L/usr/lib -L/usr/local/cuda/lib64/stubs -r simple.qke.o simple.classic.o -o simple.o
-    clang++ -Wl,-rpath,lib -Llib -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib64 -L/lib/x86_64-linux-gnu -L/lib64 -L/usr/lib/x86_64-linux-gnu -L/lib -L/usr/lib -L/usr/local/cuda/lib64/stubs simple.o -lcudaq -lcudaq-common -lcudaq-mlir-runtime -lcudaq-builder -lcudaq-ensmallen -lcudaq-nlopt -lcudaq-spin -lcudaq-em-default -lcudaq-platform-default -lnvqir -lnvqir-qpp
+    clang++ -Wl,-rpath,lib -Llib -L/usr/lib/gcc/x86_64-linux-gnu/12 -L/usr/lib64 -L/lib/x86_64-linux-gnu -L/lib64 -L/usr/lib/x86_64-linux-gnu -L/lib -L/usr/lib -L/usr/local/cuda/lib64/stubs simple.o -lcudaq -lcudaq-common -lcudaq-mlir-runtime -lcudaq-builder -lcudaq-ensmallen -lcudaq-nlopt -lcudaq-operator -lcudaq-em-default -lcudaq-platform-default -lnvqir -lnvqir-qpp
 
 This workflow orchestration is represented in the figure below: 
 
 .. image:: ../../_static/nvqpp_workflow.png
 
 We start by mapping CUDA-Q C++ kernel representations (structs, lambdas, and free functions) 
-to the Quake dialect. Since we added :code:`--save-temps`, 
+to the Quake dialect. Since we added :code:`-save-temps`, 
 we can look at the IR code that was produced. The base Quake file, :code:`simple.qke`, contains the following: 
 
 .. code-block:: console 

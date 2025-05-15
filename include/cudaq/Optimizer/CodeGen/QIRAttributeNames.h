@@ -1,5 +1,5 @@
 /****************************************************************-*- C++ -*-****
- * Copyright (c) 2022 - 2024 NVIDIA Corporation & Affiliates.                  *
+ * Copyright (c) 2022 - 2025 NVIDIA Corporation & Affiliates.                  *
  * All rights reserved.                                                        *
  *                                                                             *
  * This source code and the accompanying materials are made available under    *
@@ -23,5 +23,7 @@ static constexpr const char QIRRequiredResultsAttrName[] = "requiredResults";
 static constexpr const char QIRIrreversibleFlagName[] = "irreversible";
 
 static constexpr const char StartingOffsetAttrName[] = "StartingOffset";
+static constexpr const char ResultIndexAttrName[] = "ResultIndex";
+static constexpr const char MzAssignedNameAttrName[] = "MzAssignedName";
 
 } // namespace cudaq::opt

@@ -20,8 +20,10 @@ You are browsing the documentation for |version| version of CUDA-Q. You can find
       Quick Start <using/quick_start.rst>
       Basics <using/basics/basics.rst>
       Examples <using/examples/examples.rst>
-      Applications <using/tutorials.rst>
+      Applications <using/applications.rst>
       Backends <using/backends/backends.rst>
+      Dynamics <using/dynamics.rst>
+      CUDA-QX <using/cudaqx/cudaqx.rst>
       Installation <using/install/install.rst>
       Integration <using/integration/integration.rst>
       Extending <using/extending/extending.rst>
