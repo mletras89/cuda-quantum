@@ -17,7 +17,7 @@
 #include "utils/cudaq_utils.h"
 #include <filesystem>
 #include <fstream>
-//#include <iostream>
+
 /// This file defines the default, library mode, quantum platform.
 /// Its goal is to create a single QPU that is added to the quantum_platform
 /// which delegates kernel execution to the current Execution Manager.
@@ -128,7 +128,7 @@ public:
         throw std::runtime_error(
             qpuName + " is not a valid QPU name for the default platform.");
     }
-    //std::cout << "LETRAS backend: " << backend << std::endl;
+
     // Forward to the QPU.
     platformQPUs.front()->setTargetBackend(backend);
   }
