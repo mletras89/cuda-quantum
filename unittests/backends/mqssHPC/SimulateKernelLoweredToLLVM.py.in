@@ -86,6 +86,7 @@ if __name__ == '__main__':
   qubits, context = cudaq.testing.initialize(numQubitsRequired, int(options.shots))
   kernel()
   results = cudaq.testing.finalize(qubits, context)
+  print("Dumping results from python fake device!")
   results.dump()
  
   engine.remove_module(m)
