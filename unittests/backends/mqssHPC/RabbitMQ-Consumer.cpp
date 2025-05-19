@@ -215,7 +215,9 @@ nlohmann::json getJobStatus(const std::string& jobId) {
     countJobGetRequests++;
 
     nlohmann::json jsonResponse = {{"status", "running"}};
+    #ifdef DEBUG
     std::cout << "I am returning " << jsonResponse.dump() << std::endl;
+    #endif
     return jsonResponse;
   }
 
@@ -295,7 +297,9 @@ nlohmann::json processJob(const std::string& receivedMessage){
   file.close();
   std::remove("./tempCircuit.txt");
   std::remove("./tempResults.txt");
+  #ifdef DEBUG
   std::cout << "Results:" << std::endl << resultCircuit << std::endl;
+  #endif 
   // Generate a new UUID for the job
   std::string newJobId = generate_uuid();
   // Simulate results (in the original, this comes from some quantum function)
@@ -383,7 +387,9 @@ void answerRequestToQueue(const amqp_connection_state_t& conn,
   props.content_type = amqp_cstring_bytes("text/plain");
   if (isJSON)
     props.content_type = amqp_cstring_bytes("application/json");
+  #ifdef DEBUG
   std::cout << "Answer correlation id: "<< correlation_id << std::endl;
+  #endif
   props.correlation_id = amqp_cstring_bytes(correlation_id.c_str());
   // sending the response
   amqp_basic_publish(conn, 1, amqp_empty_bytes, amqp_cstring_bytes(reply_to.c_str()), 
@@ -392,24 +398,30 @@ void answerRequestToQueue(const amqp_connection_state_t& conn,
 
 void processConnection(std::function<nlohmann::json(std::string)> function, 
                        const std::string& queue_name) {
+  #ifdef DEBUG
   std::cout << "Started consuming messages from " << queue_name << std::endl;
+  #endif
   amqp_connection_state_t conn = setupConnection(queue_name);
   // Consume loop
   while (true) {
     amqp_envelope_t envelope;
     std::string message, correlation_id, reply_to;
     readRequestFromQueue(conn,queue_name,envelope,message,reply_to,correlation_id);
+    #ifdef DEBUG
     std::cout << "Process from Queue "<< queue_name << std::endl;
     std::cout << "Received Message: " << message << std::endl;
     std::cout << "Correlation id: " << correlation_id << std::endl;
     std::cout << "Reply to: " << reply_to << std::endl;
+    #endif
     // function has to return json
     auto jsonResponse = function(message);
     std::string json_str = jsonResponse.dump();
     answerRequestToQueue(conn, reply_to, json_str, correlation_id, true);
     amqp_destroy_envelope(&envelope);
   }
+  #ifdef DEBUG
   std::cout << "Stopped consuming from " << queue_name << std::endl;
+  #endif
 }
 
 int main() {

@@ -37,6 +37,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   //auto quakeCode = cudaq::get_quake_by_name(kernel.name()); //, false);
   //std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;
   auto counts = cudaq::sample(kernel);
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -61,6 +62,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
   kernel.mz(qubit[1]);
 
   auto counts = cudaq::sample(kernel);
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -81,6 +83,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsync) {
 
   auto future = cudaq::sample_async(kernel);
   auto counts = future.get();
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -103,6 +106,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsyncEmulate) {
 
   auto future = cudaq::sample_async(kernel);
   auto counts = future.get();
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }

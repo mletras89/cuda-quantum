@@ -65,8 +65,9 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   kernel.mz(qubit[0]);
   auto name = cudaq::getKernelName(kernel);
   //auto quakeCode = cudaq::get_quake_by_name(kernel.name()); //, false);
-  //std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;
+  //std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;  
   auto counts = cudaq::sample(kernel);
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -91,6 +92,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
   kernel.mz(qubit[1]);
 
   auto counts = cudaq::sample(kernel);
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -111,6 +113,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsync) {
 
   auto future = cudaq::sample_async(kernel);
   auto counts = future.get();
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -133,6 +136,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsyncEmulate) {
 
   auto future = cudaq::sample_async(kernel);
   auto counts = future.get();
+  std::cout << "Dumping results " << std::endl;
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
@@ -174,31 +178,6 @@ CUDAQ_TEST(MQSSTester, checkSampleAsyncLoadFromFile) {
   std::remove("saveMe.json");
 }
 
-CUDAQ_TEST(MQSSTester, checkObserveSync) {
-  std::string home = std::getenv("HOME");
-  std::string fileName = home + "/FakeCppMQSS.config";
-  auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
-
-  auto &platform = cudaq::get_platform();
-  platform.setTargetBackend(backendString);
-
-  auto [kernel, theta] = cudaq::make_kernel<double>();
-  auto qubit = kernel.qalloc(2);
-  kernel.x(qubit[0]);
-  kernel.ry(theta, qubit[1]);
-  kernel.x<cudaq::ctrl>(qubit[1], qubit[0]);
-
-  using namespace cudaq::spin;
-  cudaq::spin_op h = 5.907 - 2.1433 * x(0) * x(1) - 2.1433 * y(0) * y(1) +
-                     .21829 * z(0) - 6.125 * z(1);
-  auto result = cudaq::observe(10000, kernel, h, .59);
-  result.dump();
-
-  printf("ENERGY: %lf\n", result.expectation());
-  EXPECT_TRUE(isValidExpVal(result.expectation()));
-}
-
 CUDAQ_TEST(MQSSTester, checkObserveSyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
@@ -220,6 +199,32 @@ CUDAQ_TEST(MQSSTester, checkObserveSyncEmulate) {
   cudaq::spin_op h = 5.907 - 2.1433 * x(0) * x(1) - 2.1433 * y(0) * y(1) +
                      .21829 * z(0) - 6.125 * z(1);
   auto result = cudaq::observe(100000, kernel, h, .59);
+  result.dump();
+
+  printf("ENERGY: %lf\n", result.expectation());
+  EXPECT_TRUE(isValidExpVal(result.expectation()));
+}
+
+CUDAQ_TEST(MQSSTester, checkObserveSync) {
+  std::string home = std::getenv("HOME");
+  std::string fileName = home + "/FakeCppMQSS.config";
+  auto backendString =
+      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+
+  auto &platform = cudaq::get_platform();
+  platform.setTargetBackend(backendString);
+
+  auto [kernel, theta] = cudaq::make_kernel<double>();
+  auto qubit = kernel.qalloc(2);
+  kernel.x(qubit[0]);
+  kernel.ry(theta, qubit[1]);
+  kernel.x<cudaq::ctrl>(qubit[1], qubit[0]);
+
+  cudaq::spin_op h =
+      5.907 - 2.1433 * cudaq::spin_op::x(0) * cudaq::spin_op::x(1) -
+      2.1433 * cudaq::spin_op::y(0) * cudaq::spin_op::y(1) +
+      .21829 * cudaq::spin_op::z(0) - 6.125 * cudaq::spin_op::z(1);
+  auto result = cudaq::observe(10000, kernel, h, .59);
   result.dump();
 
   printf("ENERGY: %lf\n", result.expectation());
