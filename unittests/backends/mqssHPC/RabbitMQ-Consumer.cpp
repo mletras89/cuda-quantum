@@ -209,7 +209,7 @@ nlohmann::json getErrorAnswer(int status, const std::string& error_message){
 
 // Function to get job status and results
 nlohmann::json getJobStatus(const std::string& jobId) {
-  std::cout << "Runninbg getJobStatus with id " << jobId << std::endl;
+  std::cout << "Running getJobStatus with id " << jobId << std::endl;
   // Simulate asynchronous behavior by returning "running" for the first few requests
   if (countJobGetRequests < 3) {
     countJobGetRequests++;
