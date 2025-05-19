@@ -44,7 +44,9 @@
 #include "common/Logger.h"
 #include "RabbitMQClient.h"
 #include "cudaq/utils/cudaq_utils.h"
+#ifdef DEBUG
 #include <iostream>
+#endif
 
 std::string generate_uuid() {
     uuid_t uuid;
@@ -75,10 +77,14 @@ RabbitMQClient::RabbitMQClient() : conn(amqp_new_connection()),
   nlohmann::json jsonObject = {
       {"auth", "Authentication"},
   };
+  #ifdef DEBUG
   std::cout << "Sending login" << std::endl;
+  #endif
   std::string answer = sendMessageWithReply(RABBITMQ_CUDAQ_LOGIN_QUEUE,jsonObject.dump(),true);
   nlohmann::json json_answer = nlohmann::json::parse(answer);
+  #ifdef DEBUG
   std::cout << "Initializing rabbitmq client with answer" << json_answer.dump() << std::endl;
+  #endif
 }
 
 RabbitMQClient::~RabbitMQClient(){
@@ -94,9 +100,11 @@ void RabbitMQClient::closeConnection() {
 
 std::string RabbitMQClient::getMessageFromReplyQueue(const std::string& correlation_id,
                                                      const std::string& reply_queue){
+  #ifdef DEBUG
   // Listen for response
   std::cout << "Correlation id:" << correlation_id <<std::endl;
   std::cout << "replyQueue: " << reply_queue <<std::endl;
+  #endif
   amqp_basic_consume(conn, 1, amqp_cstring_bytes(reply_queue.c_str()), amqp_empty_bytes,
                       0, 1, 0, amqp_empty_table);
 
@@ -112,8 +120,10 @@ std::string RabbitMQClient::getMessageFromReplyQueue(const std::string& correlat
       continue;
     std::string received_id((char*)envelope.message.properties.correlation_id.bytes,
                                    envelope.message.properties.correlation_id.len);
+    #ifdef DEBUG
     std::cout << "Correlation id a:" << correlation_id <<std::endl;
     std::cout << "received id:" << correlation_id <<std::endl;
+    #endif
     if (received_id != correlation_id)
       continue;
 
@@ -147,14 +157,17 @@ std::string RabbitMQClient::sendMessageWithReply(const std::string& request_queu
   std::string reply_queue = std::string((char*)replyQueue->queue.bytes, replyQueue->queue.len);
 
   props.reply_to = amqp_cstring_bytes(reply_queue.c_str());
-
+  #ifdef DEBUG
   std::cout << "before publish" << std::endl;
+  #endif
   // send the message
   amqp_basic_publish(conn, 1, amqp_empty_bytes, amqp_cstring_bytes(request_queue.c_str()),
                       0, 0, &props, amqp_cstring_bytes(message.c_str()));
+  #ifdef DEBUG
   std::cout << "after publish" << std::endl;
   // getting the message from reply queue
   std::cout << "Correlation id " << correlation_id << std::endl;
+  #endif
   return getMessageFromReplyQueue(correlation_id,reply_queue);
 }
 } // namespace mqss

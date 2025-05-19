@@ -13,7 +13,7 @@
 #include "RabbitMQClient.h"
 #include "ServerHelper.h"
 #include <thread>
-#include <iostream>
+//#include <iostream>
 
 namespace cudaq::details {
 
@@ -28,7 +28,7 @@ sample_result future::get() {
   auto serverHelper = registry::get<ServerHelper>(qpuName);
   serverHelper->initialize(serverConfig);
   auto headers = serverHelper->getHeaders();
-  std::cout << "server helper "<< serverHelper->name() << std::endl;
+  //std::cout << "server helper "<< serverHelper->name() << std::endl;
   // for adding support for rabbitmq-mqss
   if (serverHelper->name().find("mqssHPC") != std::string::npos){
     rabbitMQClient = new mqss::RabbitMQClient();

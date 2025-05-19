@@ -81,7 +81,6 @@ std::unique_ptr<MLIRContext> initializeMLIR() {
     registerToQIRTranslation();
     registerToOpenQASMTranslation();
     registerToIQMJsonTranslation();
-
     // including the fake translation for MQSS, it is fake because 
     // does not convert code to QIR or QASM, just passed as it is.
     // It is done it like this because it is our intention to modify the less the 
