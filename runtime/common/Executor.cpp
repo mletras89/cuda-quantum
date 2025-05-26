@@ -37,7 +37,7 @@ details::future Executor::execute(std::vector<KernelExecution> &codesToExecute,
     nlohmann::json response;
     // Post it, get the response
     if (isMQSSTargetBackend){
-      std::string response_str = rabbitMQClient->sendMessageWithReply(RABBITMQ_CUDAQ_JOB_QUEUE,job.dump(),true);
+      std::string response_str = rabbitMQClient->sendMessageWithReply(job.dump(),true);
       response = nlohmann::json::parse(response_str);
     }
     else

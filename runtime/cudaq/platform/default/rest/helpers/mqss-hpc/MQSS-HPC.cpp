@@ -355,14 +355,14 @@ void HPCServerHelper::refreshTokens(bool force_refresh) {
     auto headers = generateRequestHeader();
     nlohmann::json j;
     j["refresh-token"] = refreshKey;
-    std::string response_str = client.sendMessageWithReply(RABBITMQ_CUDAQ_LOGIN_QUEUE, j.dump(), true);
+    /*std::string response_str = client.sendMessageWithReply(RABBITMQ_CUDAQ_LOGIN_QUEUE, j.dump(), true);
     nlohmann::json response_json = nlohmann::json::parse(response_str);
     apiKey = response_json["id-token"].get<std::string>();
     refreshKey = response_json["refresh-token"].get<std::string>();
     std::ofstream out(credentialsPath);
     out << "key:" << apiKey << '\n';
     out << "refresh:" << refreshKey << '\n';
-    out << "time:" << now.time_since_epoch().count() << '\n';
+    out << "time:" << now.time_since_epoch().count() << '\n';*/
     timeStr = std::to_string(now.time_since_epoch().count());
   }
 }

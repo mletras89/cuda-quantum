@@ -18,49 +18,31 @@
  -------------------------------------------------------------------------
 
 @author Martin Letras
-  @date   November 2024
+  @date   May 2025
   @version 1.0
   @ brief
-  This header defines the RabbitMQ Client class, used to communicate CudaQ
-  via RabbitMQ to the Munich Quantum Software Stack (MQSS)
-
+    Header file containing constants used for communications via
+    RabbitMQ
  *******************************************************************************
  * This source code and the accompanying materials are made available under    *
  * the terms of the Apache License 2.0 which accompanies this distribution.    *
  ******************************************************************************/
-
 #pragma once
-#include "nlohmann/json.hpp"
-#include <cstdlib>
-#include <filesystem>
-#include <map>
-#include <rabbitmq-c/amqp.h>
-#include <rabbitmq-c/tcp_socket.h>
-#include <string>
-#include <uuid/uuid.h> // For generating unique correlation IDs
 
-namespace mqss {
-/// @brief The RabbitMQ client exposes an interface
-/// to communicate to MQSS
-class RabbitMQClient {
-public:
-  /// @brief Constructor
-  RabbitMQClient();
-  /// @brief Destructor
-  ~RabbitMQClient();
-  std::string sendMessageWithReply(const std::string &message,
-                                   bool isJson = false);
+// Define the RabbitMQ server connection information
+#define AMQP_SERVER "127.0.0.1" //"localhost"
+#define AMQP_PORT 5672
+#define AMQP_USER "guest"
+#define AMQP_PASSWORD "guest"
+#define AMQP_VHOST "/"
+#define RESPONSESIZE 150
 
-protected:
-  std::string getMessageFromReplyQueue(const std::string &correlation_id,
-                                       const std::string &reply_queue);
-  std::string generateUUID();
-
-private:
-  std::string hostname;
-  int port;
-  std::string queue;
-  amqp_connection_state_t conn;
-  amqp_socket_t *socket;
-};
-} // namespace mqss
+#define QUEUE_HPC_OFFLOADER "MQSS-HPC-Offloader"
+#define QUEUE_MQP_OFFLOADER "MQSS-MQP-Offloader"
+#define QUEUE_QRM_AGNOSTIC_PASS_RUNNER "QRM-To-AgnosticPassRunner"
+#define QUEUE_AGNOSTIC_PASS_RUNNER_SCHEDULER "AgnosticPassRunner-To-Scheduler"
+#define QUEUE_SCHEDULER_TRANSPILER "Scheduler-To-Transpiler"
+#define QUEUE_TRANSPILER_SUBMITTER "Transpiler-To-Submitter"
+#define QUEUE_SUBMITTER_OFFLOADER "Submitter-To-Offloader"
+#define QUEUE_SUBMITTER_BACKEND "Submitter-To-Backend" // for Testing
+#define QUEUE_BACKEND_SUBMITTER "Submitter-To-Backend" // for Testing

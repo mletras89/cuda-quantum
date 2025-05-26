@@ -45,7 +45,7 @@ sample_result future::get() {
     nlohmann::json resultResponse;
     // This have to be added to support rabbitmq
     if (isMQSSTargetBackend){
-      std::string response_str = rabbitMQClient->sendMessageWithReply(RABBITMQ_CUDAQ_JOBSTRING_QUEUE,id.first,false);
+      std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
       resultResponse = nlohmann::json::parse(response_str);
     }
     else
@@ -56,7 +56,7 @@ sample_result future::get() {
       std::this_thread::sleep_for(polling_interval);
       // This have to be added to support rabbitmq
       if (isMQSSTargetBackend){
-        std::string response_str = rabbitMQClient->sendMessageWithReply(RABBITMQ_CUDAQ_JOBSTRING_QUEUE,id.first,false);
+        std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
         resultResponse = nlohmann::json::parse(response_str);
       }
       else
