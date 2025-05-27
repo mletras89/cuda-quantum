@@ -29,9 +29,10 @@
 * This source code and the accompanying materials are made available under    * 
 * the terms of the Apache License 2.0 which accompanies this distribution.    * 
 ******************************************************************************/
-#include <rabbitmq-c/amqp.h>
-#include <rabbitmq-c/framing.h>
-#include <rabbitmq-c/tcp_socket.h>
+//#include <rabbitmq-c/amqp.h>
+//#include <rabbitmq-c/framing.h>
+//#include <rabbitmq-c/tcp_socket.h>
+#include "RabbitMQServer.hpp"
 #include <string>
 #include <iostream>
 #include <cstdlib>
@@ -57,10 +58,23 @@
 #include "common/RuntimeMLIR.h"
 #include "common/JIT.h"
 #include "cudaq/Optimizer/CodeGen/Pipelines.h"
+#include "common/ConnectionHandler.h"
 
 #define RABBITMQ_SERVER_ADDRESS "127.0.0.1"
 #define RABBITMQ_CUDAQ_PORT     5672
 #define CUDAQ_GEN_PREFIX_NAME "__nvqpp__mlirgen____"
+
+using namespace mqss;
+
+// Start threads to consume from each queue concurrently
+std::vector<std::thread> threadsConnections;
+
+void joinThreadsConnections() {
+  for (auto &thread : threadsConnections)
+    if (thread.joinable())
+      thread.join();
+}
+
 // Global variables for storing created jobs and results
 std::unordered_map<std::string, std::pair<std::string, std::unordered_map<int, int>>> createdJobs;
 // Global variables to simulate job handling and request counting
@@ -208,8 +222,12 @@ nlohmann::json getErrorAnswer(int status, const std::string& error_message){
 }
 
 // Function to get job status and results
-nlohmann::json getJobStatus(const std::string& jobId) {
+void getJobStatus(const std::string& jobId, const std::string &replyQueue,
+                  const std::string &correlationId) {
   std::cout << "Running getJobStatus with id " << jobId << std::endl;
+  // return job status to the rabbitmq client using the replyqueue
+  RabbitMQServer replyServer(AMQP_SERVER, AMQP_PORT, QUEUE_HPC_OFFLOADER,
+                             AMQP_USER, AMQP_PASSWORD);
   // Simulate asynchronous behavior by returning "running" for the first few requests
   if (countJobGetRequests < 3) {
     countJobGetRequests++;
@@ -218,16 +236,19 @@ nlohmann::json getJobStatus(const std::string& jobId) {
     #ifdef DEBUG
     std::cout << "I am returning " << jsonResponse.dump() << std::endl;
     #endif
-    return jsonResponse;
+    replyServer.publishMessage(replyQueue, jsonResponse.dump(), correlationId, true);
+    return;
   }
 
   // Reset the request counter after 3 "running" responses
   countJobGetRequests = 0;
 
   // Check if the job exists
-  if (createdJobs.find(jobId) == createdJobs.end())
-    return getErrorAnswer(404,"Job not found");
-
+  if (createdJobs.find(jobId) == createdJobs.end()){
+    nlohmann::json errorResponse = getErrorAnswer(404,"Job not found");
+    replyServer.publishMessage(replyQueue, errorResponse.dump(), correlationId, true);
+    return;
+  }
   // Retrieve the job data (name and counts)
   auto& [name, counts] = createdJobs[jobId];
 
@@ -250,20 +271,27 @@ nlohmann::json getJobStatus(const std::string& jobId) {
   nlohmann::json resultResponse; 
   resultResponse["status"] = "completed";
   resultResponse["results"]["MOCK_SERVER_RESULTS" ] = stringResults;
-  return resultResponse;
+  replyServer.publishMessage(replyQueue, resultResponse.dump(), correlationId, true);
 }
 
-nlohmann::json processJob(const std::string& receivedMessage){
+void processJob(const std::string& receivedMessage, const std::string &replyQueue,
+                const std::string &correlationId, std::string taskId){
+  // return job status to the rabbitmq client using the replyqueue
+  RabbitMQServer replyServer(AMQP_SERVER, AMQP_PORT, QUEUE_HPC_OFFLOADER,
+                             AMQP_USER, AMQP_PASSWORD);
   nlohmann::json jobData;
+  nlohmann::json errorResponse = getErrorAnswer(400,"Invalid Job Data");
   try{
     jobData = nlohmann::json::parse(receivedMessage);
   }catch(const nlohmann::json::parse_error & e){
-    return getErrorAnswer(400,"Invalid Job Data");
+    replyServer.publishMessage(replyQueue, errorResponse.dump(), correlationId, true);
+    return;
   }
 
-  if (!jobData.contains("name") || !jobData.contains("count") || !jobData.contains("program")) 
-    return getErrorAnswer(400,"Invalid Job Data");
-
+  if (!jobData.contains("name") || !jobData.contains("count") || !jobData.contains("program")){
+    replyServer.publishMessage(replyQueue, errorResponse.dump(), correlationId, true);
+    return;
+  }
   // Extract job details from the request body
   std::string jobName = jobData["name"].get<std::string>();
   int jobCount = jobData["count"].get<int>();
@@ -309,140 +337,41 @@ nlohmann::json processJob(const std::string& receivedMessage){
   // Return the job ID as a JSON response 
   nlohmann::json resultResponse;
   resultResponse["job"] = newJobId;
-  return resultResponse;
-}
-
-amqp_connection_state_t setupConnection(const std::string& queue_name){
-  // Create a new RabbitMQ connection for each thread
-  amqp_connection_state_t conn = amqp_new_connection();
-  amqp_socket_t* socket = amqp_tcp_socket_new(conn);
-  if (!socket)
-    throw std::runtime_error("Failed to create TCP socket for "+queue_name);
-  
-  // Connect to RabbitMQ server
-  if (amqp_socket_open(socket, RABBITMQ_SERVER_ADDRESS, RABBITMQ_CUDAQ_PORT)) 
-    throw std::runtime_error("Failed to open TCP socket for "+queue_name);
-  
-  // Log in to the RabbitMQ server
-  amqp_rpc_reply_t login_reply = amqp_login(conn, "/", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, 
-                                            "guest", "guest");
-  if (login_reply.reply_type != AMQP_RESPONSE_NORMAL)
-    throw std::runtime_error("Login failed for "+queue_name);
-  
-  // Open a channel
-  amqp_channel_open(conn, 1);
-  amqp_rpc_reply_t channel_reply = amqp_get_rpc_reply(conn);
-  if (channel_reply.reply_type != AMQP_RESPONSE_NORMAL)
-    throw std::runtime_error("Opening channel failed for "+queue_name);
-
-  // Declare the queue
-  amqp_queue_declare(conn, 1, amqp_cstring_bytes(queue_name.c_str()), 
-                      0, 1, 0, 0, amqp_empty_table);
-  amqp_get_rpc_reply(conn);
-  
-  // Start consuming messages from the queue
-  amqp_basic_consume(conn, 1, amqp_cstring_bytes(queue_name.c_str()), amqp_empty_bytes, 
-                      0, 1, 0, amqp_empty_table);
-  amqp_get_rpc_reply(conn);
-
-  return conn;
-}
-
-void closeConnection(const amqp_connection_state_t& conn){
-  // Close the channel and connection
-  amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS);
-  amqp_connection_close(conn, AMQP_REPLY_SUCCESS);
-  amqp_destroy_connection(conn);
-}
-
-// readRequest, receives as parameter the name of the queue 
-// and returns the request
-
-void readRequestFromQueue(const amqp_connection_state_t& conn, 
-                          const std::string& queue_name, 
-                          amqp_envelope_t& envelope, std::string& message,
-                          std::string& reply_to, std::string& correlation_id){
-  amqp_rpc_reply_t res;
-  
-  // Attempt to get the next message from the queue
-  res = amqp_consume_message(conn, &envelope, NULL, 0);
-  
-  if (res.reply_type != AMQP_RESPONSE_NORMAL)
-    throw std::runtime_error("Error consuming message from "+queue_name);
-  
-  reply_to = std::string((char*)envelope.message.properties.reply_to.bytes, envelope.message.properties.reply_to.len);
-  correlation_id = std::string((char*)envelope.message.properties.correlation_id.bytes, envelope.message.properties.correlation_id.len);
-  // Retrieve and process message
-  message = std::string((char*)envelope.message.body.bytes, envelope.message.body.len);
-}
-
-void answerRequestToQueue(const amqp_connection_state_t& conn,
-                          const std::string& reply_to,
-                          const std::string& message,
-                          const std::string& correlation_id,        
-                          bool isJSON){
-
-  amqp_basic_properties_t props;
-  props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_CORRELATION_ID_FLAG;
-  props.content_type = amqp_cstring_bytes("text/plain");
-  if (isJSON)
-    props.content_type = amqp_cstring_bytes("application/json");
-  #ifdef DEBUG
-  std::cout << "Answer correlation id: "<< correlation_id << std::endl;
-  #endif
-  props.correlation_id = amqp_cstring_bytes(correlation_id.c_str());
-  // sending the response
-  amqp_basic_publish(conn, 1, amqp_empty_bytes, amqp_cstring_bytes(reply_to.c_str()), 
-                      0, 0, &props, amqp_cstring_bytes(message.c_str()));
-}
-
-void processConnection(std::function<nlohmann::json(std::string)> function, 
-                       const std::string& queue_name) {
-  #ifdef DEBUG
-  std::cout << "Started consuming messages from " << queue_name << std::endl;
-  #endif
-  amqp_connection_state_t conn = setupConnection(queue_name);
-  // Consume loop
-  while (true) {
-    amqp_envelope_t envelope;
-    std::string message, correlation_id, reply_to;
-    readRequestFromQueue(conn,queue_name,envelope,message,reply_to,correlation_id);
-    #ifdef DEBUG
-    std::cout << "Process from Queue "<< queue_name << std::endl;
-    std::cout << "Received Message: " << message << std::endl;
-    std::cout << "Correlation id: " << correlation_id << std::endl;
-    std::cout << "Reply to: " << reply_to << std::endl;
-    #endif
-    // function has to return json
-    auto jsonResponse = function(message);
-    std::string json_str = jsonResponse.dump();
-    answerRequestToQueue(conn, reply_to, json_str, correlation_id, true);
-    amqp_destroy_envelope(&envelope);
-  }
-  #ifdef DEBUG
-  std::cout << "Stopped consuming from " << queue_name << std::endl;
-  #endif
+  // return the job id
+  replyServer.publishMessage(replyQueue, resultResponse.dump(), correlationId, true);
 }
 
 int main() {
   std::cout << "Starting rabbitmq consumer " << std::endl;
-  // Define the queue names
-  const std::string queueLogin      = "/login";
-  const std::string queueJob        = "/job";
-  const std::string queueJobString  = "/job/<string>";
-  
-  // Start threads to consume from each queue concurrently
-  std::vector<std::thread> threads;
-  
-  // Creating a thread for each queue
-  threads.push_back(std::thread(processConnection, processLogin, queueLogin));
-  threads.push_back(std::thread(processConnection, processJob, queueJob));
-  threads.push_back(std::thread(processConnection, getJobStatus, queueJobString));
-  
-  // Wait for all threads to finish
-  for (auto& t : threads) {
-      t.join();
+  RabbitMQServer offloaderListener(AMQP_SERVER, AMQP_PORT, QUEUE_HPC_OFFLOADER,
+                                   AMQP_USER, AMQP_PASSWORD);
+  // tell the offloaderListener to start to consume
+  offloaderListener.startToConsume();
+  while (true) {
+    std::cout << "Waiting for a new job..." << std::endl;
+    amqp_envelope_t envelope;
+    std::string message, replyQueue, correlationId;
+    offloaderListener.consumeMessage(envelope, message, replyQueue,
+                                     correlationId);
+    try {
+    // try to parse the received message, if is a json then I have to process
+    // it as a new job
+      auto json = nlohmann::json::parse(message);
+      std::string newTaskId = generate_uuid();
+      threadsConnections.push_back(
+          std::thread(processJob, message, replyQueue,
+                      correlationId, newTaskId));
+      std::cout << "Processing new task with id: {}" << newTaskId << std::endl;
+    } catch (const nlohmann::json::parse_error& e) {
+    // the message is just a regular uuid for the case when asking the status of
+    // a job
+      threadsConnections.push_back(std::thread(getJobStatus,
+                                               message,
+                                               replyQueue, correlationId));
+      std::cout <<"Checking status of task with id: {}" << message << std::endl;
+    }
   }
-  
-  return 0;
+  // Ensure the logger is properly destroyed
+  joinThreadsConnections();
+  return 1;
 }
