@@ -34,6 +34,7 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #include "common/ServerHelper.h"
 #include "cudaq/utils/cudaq_utils.h"
 #include "common/RabbitMQClient.h"
+#include "common/QuantumTask.h"
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -73,6 +74,8 @@ protected:
   /// using the provided refresh token. This function will do that.
   void refreshTokens(bool force_refresh = false);
 
+  // information read from the configuration that has to be passed to the MQSS
+  QuantumJob quantumTask;
   /// @brief Return the headers required for the REST calls
   RestHeaders generateRequestHeader() const;
 
@@ -101,6 +104,38 @@ public:
     iter = backendConfig.find("credentials");
     if (iter != backendConfig.end())
       userSpecifiedCredentials = iter->second;
+
+    // reading informatin from the configuration
+    iter = backendConfig.find("n_qbits");
+    if (iter != backendConfig.end())
+      quantumTask.n_qbits = std::stoi(iter->second);
+    iter = backendConfig.find("n_shots");
+    if (iter != backendConfig.end())
+      quantumTask.n_shots = std::stoi(iter->second);
+    iter = backendConfig.find("preferred_qpu");
+    if (iter != backendConfig.end())
+      quantumTask.preferred_qpu = iter->second;
+    iter = backendConfig.find("priority");
+    if (iter != backendConfig.end())
+      quantumTask.priority = std::stoi(iter->second);
+    iter = backendConfig.find("optimisation_level");
+    if (iter != backendConfig.end())
+      quantumTask.optimisation_level = std::stoi(iter->second);
+    iter = backendConfig.find("no_modify");
+    if (iter != backendConfig.end())
+      quantumTask.no_modify = parseBool(iter->second);
+    iter = backendConfig.find("transpiler_flag");
+    if (iter != backendConfig.end())
+      quantumTask.transpiler_flag = parseBool(iter->second);
+    iter = backendConfig.find("result_type");
+    if (iter != backendConfig.end())
+      quantumTask.result_type = std::stoi(iter->second);
+    iter = backendConfig.find("additional_information");
+    if (iter != backendConfig.end())
+      quantumTask.additional_information = iter->second;
+    iter = backendConfig.find("user_identity");
+    if (iter != backendConfig.end())
+      quantumTask.user_identity = iter->second;
 
     parseConfigForCommonParams(config);
   }
@@ -131,24 +166,29 @@ HPCServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   for (auto &circuitCode : circuitCodes) {
     // Construct the job itself
     ServerMessage j;
-    j["machine"] = machine;
-    j["count"] = shots;  
     j["name"] = circuitCode.name;
-    j["circuitFile"] = "circuitFile";
-    j["circuitFileType"] = "circuitFileType";
-    j["resultDestination"] = "resultDestination";
-    j["preferredQPU"] = "iqm";
-    j["priority"] = 1;
-    j["optimizationLevel"] = 1;   
-    j["noModify"] = false;  
-    j["transpilerFlag"] = false;  
-    j["resultType"] = 100; 
-    j["language"] = "Quake";
-    j["program"] = circuitCode.code;
-    j["circuit"] = circuitCode.code;
-    j["additionalInformation"] = "Dummy information...";
-    j["options"] = nullptr;
-
+    j["task_id"] = "", // mqss has to assign id
+    j["n_qbits"] = quantumTask.n_qbits;
+    j["n_shots"] = quantumTask.n_shots;
+    // assigning circuit files object
+    std::vector<std::string> circuit_files;
+    circuit_files.push_back(circuitCode.code);
+    j["circuit_files"] = circuit_files;
+    j["circuit_file_type"] = "quake"; // submitting quake to mqss
+    j["preferred_qpu"] = quantumTask.preferred_qpu;
+    j["scheduled_qpu"] = "";  // mqss has to assign it
+    j["result_destination"] = quantumTask.result_destination;
+    j["priority"] = quantumTask.priority;
+    j["optimisation_level"] = quantumTask.optimisation_level;
+    j["no_modify"]  = quantumTask.no_modify;
+    j["transpiler_flag"] = quantumTask.transpiler_flag;
+    j["result_type"] = quantumTask.result_type;
+    j["circuits_qiskit"]= nlohmann::json::array();
+    j["additional_information"] = quantumTask.additional_information;
+    j["restricted_resource_names"] = quantumTask.restricted_resource_names;
+    j["user_identity"] = quantumTask.user_identity;
+    j["token"] =  quantumTask.token;
+    j["via_hpc"] = true; // via MQP
     // Get the current time as a time_point
     auto now = std::chrono::system_clock::now();
     // Convert time_point to time_t (which holds time in seconds)
@@ -157,7 +197,7 @@ HPCServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     std::ostringstream timeStream;
     timeStream << std::put_time(std::localtime(&currentTime), "%Y-%m-%d %H:%M:%S");
 
-    j["submitTime"] = timeStream.str();  
+    j["submit_time"] = timeStream.str();  
     messages.push_back(j);
   }
 
