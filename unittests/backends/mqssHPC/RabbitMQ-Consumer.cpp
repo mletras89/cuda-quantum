@@ -288,14 +288,19 @@ void processJob(const std::string& receivedMessage, const std::string &replyQueu
     return;
   }
 
-  if (!jobData.contains("name") || !jobData.contains("count") || !jobData.contains("program")){
+  if (!jobData.contains("name") || !jobData.contains("n_shots") || !jobData.contains("circuit_files")){
     replyServer.publishMessage(replyQueue, errorResponse.dump(), correlationId, true);
     return;
   }
   // Extract job details from the request body
   std::string jobName = jobData["name"].get<std::string>();
-  int jobCount = jobData["count"].get<int>();
-  std::string program = jobData["program"].get<std::string>();
+  int jobCount = jobData["n_shots"].get<int>();
+  std::vector<std::string> circuit_files;
+  auto& files = jobData["circuit_files"];
+  for (size_t i = 0; i < files.size(); ++i) {
+    circuit_files.push_back(files[i].get<std::string>()); // .s() gives you the string
+  }
+  std::string program = circuit_files[0];
   // Simulate kernel function and qubit processing
   std::string kernelName = getKernelName(program);
   std::string qirCode = lowerQuakeCode(program,kernelName);

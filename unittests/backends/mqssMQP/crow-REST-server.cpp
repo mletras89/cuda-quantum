@@ -288,13 +288,18 @@ void startServer(int port) {
 
         // Parse the incoming JSON data for the job
         auto jobData = crow::json::load(req.body);
-        if (!jobData || !jobData.has("name") || !jobData.has("count") || !jobData.has("program")) {
+        if (!jobData || !jobData.has("name") || !jobData.has("n_shots") || !jobData.has("circuit_files")) {
             return crow::response(400, "Invalid Job Data");
         }
         // Extract job details from the request body
         std::string jobName = jobData["name"].s();
-        int jobCount = jobData["count"].i();
-        std::string program = jobData["program"].s();
+        int jobCount = jobData["n_shots"].i();
+        std::vector<std::string> circuit_files;
+        auto& files = jobData["circuit_files"];
+        for (size_t i = 0; i < files.size(); ++i) {
+          circuit_files.push_back(files[i].s()); // .s() gives you the string
+        }
+        std::string program = circuit_files[0];
 
         // Log job information
         /*std::cout << "Posting job with name = " << jobName << ", count = " << jobCount << std::endl;*/
