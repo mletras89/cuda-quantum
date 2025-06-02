@@ -376,12 +376,12 @@ std::string searchMQSSAPIKey(std::string &key, std::string &refreshKey,
                          std::string userSpecifiedConfig) {
   std::string hwConfig;
   // Allow someone to tweak this with an environment variable
-  if (auto creds = std::getenv("CUDAQ_MQSS_CREDENTIALS"))
+  if (auto creds = std::getenv("CUDAQ_MQSS_CONFIGURATION"))
     hwConfig = std::string(creds);
   else if (!userSpecifiedConfig.empty())
     hwConfig = userSpecifiedConfig;
   else
-    hwConfig = std::string(getenv("HOME")) + std::string("/.mqssMQP_config");
+    hwConfig = std::string(getenv("HOME")) + std::string("/.mqss_config");
   if (cudaq::fileExists(hwConfig)) {
     findMQSSApiKeyInFile(key, hwConfig, refreshKey, timeStr);
   } else {

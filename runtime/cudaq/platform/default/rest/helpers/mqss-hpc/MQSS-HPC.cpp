@@ -448,7 +448,7 @@ std::string searchMQSSAPIKeyHPC(std::string &key, std::string &refreshKey,
                          std::string userSpecifiedConfig) {
   std::string hwConfig;
   // Allow someone to tweak this with an environment variable
-  if (auto creds = std::getenv("CUDAQ_MQSS_CREDENTIALS"))
+  if (auto creds = std::getenv("CUDAQ_MQSS_CONFIGURATION"))
     hwConfig = std::string(creds);
   else if (!userSpecifiedConfig.empty())
     hwConfig = userSpecifiedConfig;
