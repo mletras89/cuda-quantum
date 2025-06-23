@@ -6,7 +6,7 @@ Licensed under the Apache License, Version 2.0 with LLVM Exceptions (the
 "License"); you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-TODO
+https://github.com/Munich-Quantum-Software-Stack/MQSS-CUDAQ-Adapter/tree/develop?tab=readme-ov-file#
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
