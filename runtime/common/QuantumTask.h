@@ -66,3 +66,15 @@ inline bool parseBool(const std::string& str) {
 
     throw std::invalid_argument("Invalid boolean string: " + str);
 }
+
+inline std::vector<std::string> parseStringList(const std::string& input) {
+    std::vector<std::string> result;
+    std::stringstream ss(input);
+    std::string item;
+
+    while (std::getline(ss, item, ',')) {
+        result.push_back(item);
+    }
+
+    return result;
+}
