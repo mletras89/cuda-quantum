@@ -57,9 +57,9 @@ std::string searchMQSSAPIKeyHPC(std::string &key, std::string &refreshKey,
 class HPCServerHelper : public ServerHelper {
 protected:
   /// @brief The base URL
-  std::string baseUrl = "https://qapi.quantinuum.com/v1/";
+  //std::string baseUrl = "https://qapi.quantinuum.com/v1/";
   /// @brief The machine we are targeting
-  std::string machine = "H2-1SC";
+  //std::string machine = "H2-1SC";
   /// @brief Time string, when the last tokens were retrieved
   std::string timeStr = "";
   /// @brief The refresh token
@@ -89,53 +89,38 @@ public:
     backendConfig = config;
 
     // Set the machine
-    auto iter = backendConfig.find("machine");
-    if (iter != backendConfig.end())
-      machine = iter->second;
+    //auto iter = backendConfig.find("machine");
+    //if (iter != backendConfig.end())
+    //  machine = iter->second;
 
     // Set an alternate base URL if provided
-    iter = backendConfig.find("url");
+    /*iter = backendConfig.find("url");
     if (iter != backendConfig.end()) {
       baseUrl = iter->second;
       if (!baseUrl.ends_with("/"))
         baseUrl += "/";
-    }
+    }*/
 
-    iter = backendConfig.find("credentials");
+    auto iter = backendConfig.find("credentials");
     if (iter != backendConfig.end())
       userSpecifiedCredentials = iter->second;
 
     // reading informatin from the configuration
-    iter = backendConfig.find("n_qbits");
+    iter = backendConfig.find("transpiler_flag");
     if (iter != backendConfig.end())
-      quantumTask.n_qbits = std::stoi(iter->second);
-    iter = backendConfig.find("n_shots");
-    if (iter != backendConfig.end())
-      quantumTask.n_shots = std::stoi(iter->second);
+      quantumTask.transpiler_flag = parseBool(iter->second);
     iter = backendConfig.find("preferred_qpu");
     if (iter != backendConfig.end())
       quantumTask.preferred_qpu = iter->second;
+    iter = backendConfig.find("restricted_resource_names");
+    if (iter != backendConfig.end())
+      quantumTask.restricted_resource_names = parseStringList(iter->second);
     iter = backendConfig.find("priority");
     if (iter != backendConfig.end())
       quantumTask.priority = std::stoi(iter->second);
     iter = backendConfig.find("optimisation_level");
     if (iter != backendConfig.end())
       quantumTask.optimisation_level = std::stoi(iter->second);
-    iter = backendConfig.find("no_modify");
-    if (iter != backendConfig.end())
-      quantumTask.no_modify = parseBool(iter->second);
-    iter = backendConfig.find("transpiler_flag");
-    if (iter != backendConfig.end())
-      quantumTask.transpiler_flag = parseBool(iter->second);
-    iter = backendConfig.find("result_type");
-    if (iter != backendConfig.end())
-      quantumTask.result_type = std::stoi(iter->second);
-    iter = backendConfig.find("additional_information");
-    if (iter != backendConfig.end())
-      quantumTask.additional_information = iter->second;
-    iter = backendConfig.find("user_identity");
-    if (iter != backendConfig.end())
-      quantumTask.user_identity = iter->second;
 
     parseConfigForCommonParams(config);
   }
@@ -169,7 +154,7 @@ HPCServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     j["name"] = circuitCode.name;
     j["task_id"] = "", // mqss has to assign id
     j["n_qbits"] = quantumTask.n_qbits;
-    j["n_shots"] = quantumTask.n_shots;
+    j["n_shots"] = shots;
     // assigning circuit files object
     std::vector<std::string> circuit_files;
     circuit_files.push_back(circuitCode.code);
@@ -210,10 +195,9 @@ HPCServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
   RestHeaders headers = generateRequestHeader();
 
   cudaq::info(
-      "Created job payload for MQSS, language is quake, targeting {}",
-      machine);
+      "Created job payload for MQSS, language is quake");
    // return the payload
-  return std::make_tuple(baseUrl + "job", headers, messages);
+  return std::make_tuple("job", headers, messages);
 }
 
 std::string HPCServerHelper::extractJobId(ServerMessage &postResponse) {
@@ -222,11 +206,11 @@ std::string HPCServerHelper::extractJobId(ServerMessage &postResponse) {
 
 std::string
 HPCServerHelper::constructGetJobPath(ServerMessage &postResponse) {
-  return baseUrl + "job/" + extractJobId(postResponse);
+  return  "job/" + extractJobId(postResponse);
 }
 
 std::string HPCServerHelper::constructGetJobPath(std::string &jobId) {
-  return baseUrl + "job/" + jobId;
+  return "job/" + jobId;
 }
 
 bool HPCServerHelper::jobIsDone(ServerMessage &getJobResponse) {

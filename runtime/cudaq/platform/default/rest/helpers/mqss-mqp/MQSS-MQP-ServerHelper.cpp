@@ -6,7 +6,7 @@ Licensed under the Apache License, Version 2.0 with LLVM Exceptions (the
 "License"); you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-TODO
+https://github.com/Munich-Quantum-Software-Stack/MQSS-CUDAQ-Adapter/tree/develop?tab=readme-ov-file#
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
@@ -81,37 +81,23 @@ public:
       if (!mqpUrl.ends_with("/"))
         mqpUrl += "/";
     }
-    // reading informatin from the configuration
-    iter = backendConfig.find("n_qbits");
+    // reading information from the configuration
+    iter = backendConfig.find("transpiler_flag");
     if (iter != backendConfig.end())
-      quantumTask.n_qbits = std::stoi(iter->second);
-    iter = backendConfig.find("n_shots");
-    if (iter != backendConfig.end())
-      quantumTask.n_shots = std::stoi(iter->second);
+      quantumTask.transpiler_flag = parseBool(iter->second);
     iter = backendConfig.find("preferred_qpu");
     if (iter != backendConfig.end())
       quantumTask.preferred_qpu = iter->second;
+    iter = backendConfig.find("restricted_resource_names");
+    if (iter != backendConfig.end())
+      quantumTask.restricted_resource_names = parseStringList(iter->second);
     iter = backendConfig.find("priority");
     if (iter != backendConfig.end())
       quantumTask.priority = std::stoi(iter->second);
     iter = backendConfig.find("optimisation_level");
     if (iter != backendConfig.end())
       quantumTask.optimisation_level = std::stoi(iter->second);
-    iter = backendConfig.find("no_modify");
-    if (iter != backendConfig.end())
-      quantumTask.no_modify = parseBool(iter->second);
-    iter = backendConfig.find("transpiler_flag");
-    if (iter != backendConfig.end())
-      quantumTask.transpiler_flag = parseBool(iter->second);
-    iter = backendConfig.find("result_type");
-    if (iter != backendConfig.end())
-      quantumTask.result_type = std::stoi(iter->second);
-    iter = backendConfig.find("additional_information");
-    if (iter != backendConfig.end())
-      quantumTask.additional_information = iter->second;
-    iter = backendConfig.find("user_identity");
-    if (iter != backendConfig.end())
-      quantumTask.user_identity = iter->second;
+
    // Allow overriding MQSS Server Url, the compiled program will still work if
     // architecture matches. This is useful in case we're using the same program
     // against different backends, for example simulated and actually connected
@@ -153,7 +139,7 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     j["name"] = circuitCode.name;
     j["task_id"] = "", // mqss has to assign id
     j["n_qbits"] = quantumTask.n_qbits;
-    j["n_shots"] = quantumTask.n_shots;
+    j["n_shots"] = shots;//quantumTask.n_shots;
     // assigning circuit files object
     std::vector<std::string> circuit_files;
     circuit_files.push_back(circuitCode.code);

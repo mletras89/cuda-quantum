@@ -10,8 +10,8 @@
 #include <gtest/gtest.h>
 #include <regex>
 
-std::string mockPort = "62440";
-std::string backendStringTemplate = "mqssHPC;emulate;false;url;http://localhost:{};credentials;{}";
+//std::string mockPort = "62440";
+std::string backendStringTemplate = "mqssHPC;emulate;false;credentials;{};transpiler_flag;false;restricted_resource_names;AQT,IQM;priority;2;optimisation_level;3;preferred_qpu;planq";
 
 bool isValidExpVal(double value) {
   // give us some wiggle room while keep the tests fast
@@ -22,7 +22,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
   std::cout << "backendString:: " << backendString << std::endl;
 
   auto &platform = cudaq::get_platform();
@@ -46,7 +46,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
   backendString =
       std::regex_replace(backendString, std::regex("false"), "true");
   std::cout << "backendString:: " << backendString << std::endl;
@@ -71,7 +71,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsync) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
@@ -92,7 +92,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
   backendString =
       std::regex_replace(backendString, std::regex("false"), "true");
 
@@ -115,7 +115,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsyncLoadFromFile) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
@@ -152,7 +152,7 @@ CUDAQ_TEST(MQSSTester, checkObserveSync) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
@@ -177,7 +177,7 @@ CUDAQ_TEST(MQSSTester, checkObserveSyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
   backendString =
       std::regex_replace(backendString, std::regex("false"), "true");
 
@@ -204,7 +204,7 @@ CUDAQ_TEST(QuantinuumTester, checkObserveAsync) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
@@ -231,7 +231,7 @@ CUDAQ_TEST(MQSSTester, checkObserveAsyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
   backendString =
       std::regex_replace(backendString, std::regex("false"), "true");
 
@@ -261,7 +261,7 @@ CUDAQ_TEST(MQSSTester, checkObserveAsyncLoadFromFile) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+      fmt::format(fmt::runtime(backendStringTemplate), fileName);
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);

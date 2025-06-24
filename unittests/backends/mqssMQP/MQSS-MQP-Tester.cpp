@@ -41,7 +41,7 @@
 #include <regex>
 
 std::string mockPort = "62440";
-std::string backendStringTemplate = "mqssMQP;emulate;false;url;http://localhost:{};credentials;{}";
+std::string backendStringTemplate = "mqssMQP;emulate;false;url;http://localhost:{};credentials;{};transpiler_flag;false;restricted_resource_names;AQT,IQM;priority;2;optimisation_level;3;preferred_qpu;planq";
 
 bool isValidExpVal(double value) {
   // give us some wiggle room while keep the tests fast
@@ -53,8 +53,9 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   std::string fileName = home + "/FakeCppMQSS.config";
   auto backendString =
       fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
+  #ifdef DEBUG
   std::cout << "backendString:: " << backendString << std::endl;
-
+  #endif
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
   //std::cout << "platform.name():" << platform.name() << std::endl;
@@ -65,7 +66,9 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   kernel.mz(qubit[0]);
   auto name = cudaq::getKernelName(kernel);
   //auto quakeCode = cudaq::get_quake_by_name(kernel.name()); //, false);
-  //std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;  
+  #ifdef DEBUG
+  std::cout << "INFO OF KERNEL: KERNEL NAME = " << kernel.name() << " second name "<< name <<" QUAKE CODE = " << kernel.to_quake() << std::endl;  
+  #endif
   auto counts = cudaq::sample(kernel);
   std::cout << "Dumping results " << std::endl;
   counts.dump();
@@ -78,9 +81,10 @@ CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
   auto backendString =
       fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
   backendString =
-      std::regex_replace(backendString, std::regex("false"), "true");
+      std::regex_replace(backendString, std::regex("emulate;false"), "emulate;true");
+  #ifdef DEBUG
   std::cout << "backendString:: " << backendString << std::endl;
-
+  #endif
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
 
@@ -124,7 +128,7 @@ CUDAQ_TEST(MQSSTester, checkSampleAsyncEmulate) {
   auto backendString =
       fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
   backendString =
-      std::regex_replace(backendString, std::regex("false"), "true");
+      std::regex_replace(backendString, std::regex("emulate;false"), "emulate;true");
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
@@ -184,7 +188,7 @@ CUDAQ_TEST(MQSSTester, checkObserveSyncEmulate) {
   auto backendString =
       fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
   backendString =
-      std::regex_replace(backendString, std::regex("false"), "true");
+      std::regex_replace(backendString, std::regex("emulate;false"), "emulate;true");
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);
@@ -264,7 +268,7 @@ CUDAQ_TEST(MQSSTester, checkObserveAsyncEmulate) {
   auto backendString =
       fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
   backendString =
-      std::regex_replace(backendString, std::regex("false"), "true");
+      std::regex_replace(backendString, std::regex("emulate;false"), "emulate;true");
 
   auto &platform = cudaq::get_platform();
   platform.setTargetBackend(backendString);

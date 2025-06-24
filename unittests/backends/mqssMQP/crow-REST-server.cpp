@@ -288,6 +288,9 @@ void startServer(int port) {
 
         // Parse the incoming JSON data for the job
         auto jobData = crow::json::load(req.body);
+        #ifdef DEBUG
+        std::cout << "jobData" << jobData << std::endl;
+        #endif
         if (!jobData || !jobData.has("name") || !jobData.has("n_shots") || !jobData.has("circuit_files")) {
             return crow::response(400, "Invalid Job Data");
         }
