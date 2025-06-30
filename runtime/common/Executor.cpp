@@ -37,8 +37,12 @@ details::future Executor::execute(std::vector<KernelExecution> &codesToExecute,
     nlohmann::json response;
     // Post it, get the response
     if (isMQSSTargetBackend){
-      std::string response_str = rabbitMQClient->sendMessageWithReply(job.dump(),true);
-      response = nlohmann::json::parse(response_str);
+      if(rabbitMQClient) {
+        std::string response_str = rabbitMQClient->sendMessageWithReply(job.dump(),true);
+        response = nlohmann::json::parse(response_str);
+      }
+      else
+        throw std::runtime_error("RabbitMQ client not initialized.");
     }
     else
       response = client.post(jobPostPath, "", job, headers);
