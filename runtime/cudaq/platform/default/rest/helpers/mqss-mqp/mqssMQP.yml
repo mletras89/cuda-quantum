@@ -32,7 +32,7 @@ config:
   # Define the lowering pipeline
 #  platform-lowering-config: "const-prop-complex,canonicalize,cse,lift-array-value,state-prep,unitary-synthesis,canonicalize,apply-op-specialization,aggressive-early-inlining,expand-measurements,unrolling-pipeline,decomposition{enable-patterns=U3ToRotations},func.func(lower-to-cfg),canonicalize,func.func(multicontrol-decomposition),quantinuum-gate-set-mapping"
   # Tell the rest-qpu that we are generating Quake to be sent to the MQSS
-  codegen-emission: mqss
+  codegen-emission: qasm2
   # Library mode is only for simulators, physical backends must turn this off
   library-mode: false
 
