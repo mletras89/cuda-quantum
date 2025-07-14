@@ -37,7 +37,7 @@ struct QuantumJob {
   std::vector<std::string> circuit_files = {};
   std::string circuit_file_type = "quake";
   std::string result_destination = "";
-  std::string preferred_qpu = "iqm";
+  std::string preferred_qpu = "QExa20";
   std::string scheduled_qpu = "";
   // QDMI_Device scheduled_qpu;
   int priority = 0;
