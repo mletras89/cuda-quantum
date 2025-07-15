@@ -149,8 +149,8 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     // Construct the job itself
     ServerMessage j;
     // assigning circuit files object
-    std::vector<std::string> circuit_files;
-    circuit_files.push_back(circuitCode.code);
+    //std::vector<std::string> circuit_files;
+    //circuit_files.push_back(circuitCode.code);
     j["circuit"] = circuitCode.code;
     j["circuit_format"] = "qasm"; // submitting quake to mqss
     j["resource_name"] = quantumTask.preferred_qpu;
