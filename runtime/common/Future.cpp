@@ -23,7 +23,7 @@ sample_result future::get() {
   bool isMQSSTargetBackend = false;
 
 #ifdef CUDAQ_RESTCLIENT_AVAILABLE
-  mqss::RabbitMQClient* rabbitMQClient; 
+  mqss::RabbitMQClient* rabbitMQClient=nullptr; 
   RestClient client;
   auto serverHelper = registry::get<ServerHelper>(qpuName);
   serverHelper->initialize(serverConfig);
@@ -45,8 +45,12 @@ sample_result future::get() {
     nlohmann::json resultResponse;
     // This have to be added to support rabbitmq
     if (isMQSSTargetBackend){
-      std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
-      resultResponse = nlohmann::json::parse(response_str);
+      if(rabbitMQClient) {
+        std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
+        resultResponse = nlohmann::json::parse(response_str);
+      }
+      else
+        throw std::runtime_error("RabbitMQ client not initialized.");
     }
     else
       resultResponse = client.get(jobGetPath, "", headers);
@@ -56,8 +60,12 @@ sample_result future::get() {
       std::this_thread::sleep_for(polling_interval);
       // This have to be added to support rabbitmq
       if (isMQSSTargetBackend){
-        std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
-        resultResponse = nlohmann::json::parse(response_str);
+        if(rabbitMQClient) {
+          std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
+          resultResponse = nlohmann::json::parse(response_str);
+        }
+        else
+          throw std::runtime_error("RabbitMQ client not initialized.");
       }
       else
         resultResponse = client.get(jobGetPath, "", headers);
