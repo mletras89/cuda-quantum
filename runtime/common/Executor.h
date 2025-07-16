@@ -10,7 +10,6 @@
 #include "common/ExecutionContext.h"
 #include "common/RestClient.h"
 #include "common/ServerHelper.h"
-#include "common/RabbitMQClient.h"
 
 namespace cudaq {
 
@@ -22,9 +21,6 @@ class Executor : public registry::RegisteredType<Executor> {
 protected:
   /// @brief The REST Client used to interact with the remote system
   RestClient client;
-
-  /// @brief The RabbitMQ Client used to interact with the MQSS
-  mqss::RabbitMQClient* rabbitMQClient;
 
   /// @brief The ServerHelper, providing system-specific JSON-formatted
   /// job posts and results translation

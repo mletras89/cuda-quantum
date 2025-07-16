@@ -10,30 +10,20 @@
 #include "Logger.h"
 #include "ObserveResult.h"
 #include "RestClient.h"
-#include "RabbitMQClient.h"
 #include "ServerHelper.h"
 #include <thread>
-//#include <iostream>
 
 namespace cudaq::details {
 
 sample_result future::get() {
   if (wrapsFutureSampling)
     return inFuture.get();
-  bool isMQSSTargetBackend = false;
 
 #ifdef CUDAQ_RESTCLIENT_AVAILABLE
-  mqss::RabbitMQClient* rabbitMQClient =nullptr;
   RestClient client;
   auto serverHelper = registry::get<ServerHelper>(qpuName);
   serverHelper->initialize(serverConfig);
   auto headers = serverHelper->getHeaders();
-  //std::cout << "server helper "<< serverHelper->name() << std::endl;
-  // for adding support for rabbitmq-mqss
-  if (serverHelper->name().find("mqssHPC") != std::string::npos){
-    rabbitMQClient = new mqss::RabbitMQClient();
-    isMQSSTargetBackend = true;
-  }
   std::vector<ExecutionResult> results;
   for (auto &id : jobs) {
     cudaq::info("Future retrieving results for {}.", id.first);
@@ -43,32 +33,12 @@ sample_result future::get() {
     cudaq::info("Future got job retrieval path as {}.", jobGetPath);
 
     nlohmann::json resultResponse;
-    // This have to be added to support rabbitmq
-    if (isMQSSTargetBackend){
-      if(rabbitMQClient) {
-        std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
-        resultResponse = nlohmann::json::parse(response_str);
-      }
-      else
-        throw std::runtime_error("RabbitMQ client not initialized.");
-    }
-    else
-      resultResponse = client.get(jobGetPath, "", headers);
+    resultResponse = client.get(jobGetPath, "", headers);
     while (!serverHelper->jobIsDone(resultResponse)) {
       auto polling_interval =
           serverHelper->nextResultPollingInterval(resultResponse);
       std::this_thread::sleep_for(polling_interval);
-      // This have to be added to support rabbitmq
-      if (isMQSSTargetBackend){
-        if(rabbitMQClient) {
-          std::string response_str = rabbitMQClient->sendMessageWithReply(id.first,false);
-          resultResponse = nlohmann::json::parse(response_str);
-        }
-        else
-          throw std::runtime_error("RabbitMQ client not initialized.");
-      }
-      else
-        resultResponse = client.get(jobGetPath, "", headers);
+      resultResponse = client.get(jobGetPath, "", headers);
     }
     auto c = serverHelper->processResults(resultResponse, id.first);
 

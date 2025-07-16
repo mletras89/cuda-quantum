@@ -13,7 +13,6 @@ namespace cudaq {
 
 details::future Executor::execute(std::vector<KernelExecution> &codesToExecute,
                                   bool isObserve) {
-  bool isMQSSTargetBackend = false;
   serverHelper->setShots(shots);
 
   cudaq::info("Executor creating {} jobs to execute with the {} helper.",
@@ -25,27 +24,12 @@ details::future Executor::execute(std::vector<KernelExecution> &codesToExecute,
   auto config = serverHelper->getConfig();
   std::vector<details::future::Job> ids;
 
-  // for adding support for rabbitmq-mqss
-  if (serverHelper->name().find("mqssHPC") != std::string::npos){ 
-    isMQSSTargetBackend = true;
-    rabbitMQClient = new mqss::RabbitMQClient();
-  }
-
   for (std::size_t i = 0; auto &job : jobs) {
     cudaq::info("Job (name={}) created, posting to {}", codesToExecute[i].name,
                 jobPostPath);
     nlohmann::json response;
     // Post it, get the response
-    if (isMQSSTargetBackend){
-      if(rabbitMQClient) {
-        std::string response_str = rabbitMQClient->sendMessageWithReply(job.dump(),true);
-        response = nlohmann::json::parse(response_str);
-      }
-      else
-        throw std::runtime_error("RabbitMQ client not initialized.");
-    }
-    else
-      response = client.post(jobPostPath, "", job, headers);
+    response = client.post(jobPostPath, "", job, headers);
     cudaq::info("Job (name={}) posted, response was {}", codesToExecute[i].name,
                 response.dump());
 
