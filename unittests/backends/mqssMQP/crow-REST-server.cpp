@@ -45,6 +45,7 @@
 #include <uuid/uuid.h>  // For generating UUIDs
 #include <regex>
 #include <string>
+#include <iostream>
 // llvm includes
 #include <llvm/Support/Base64.h>
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -67,7 +68,7 @@ struct Job {
 };
 
 // Global variables for storing created jobs and results
-std::unordered_map<std::string, std::pair<std::string, std::unordered_map<int, int>>> createdJobs;
+std::unordered_map<std::string, std::unordered_map<int, int>> createdJobs;
 // Global variables to simulate job handling and request counting
 int countJobGetRequests = 0;
 // Function to generate a new UUID as a string
@@ -229,7 +230,7 @@ crow::response getJob(const std::string& jobId) {
         return crow::response(404, "Job not found");
 
     // Retrieve the job data (name and counts)
-    auto& [name, counts] = createdJobs[jobId];
+    auto counts = createdJobs[jobId];
     // Prepare the result data by expanding the counts
     std::vector<int> retData;
     for (const auto& [bits, count] : counts) {
@@ -288,10 +289,10 @@ void startServer(int port) {
 
         // Parse the incoming JSON data for the job
         auto jobData = crow::json::load(req.body);
-        #ifdef DEBUG
-        std::cout << "jobData" << jobData << std::endl;
-        #endif
-        if (!jobData || !jobData.has("name") || !jobData.has("n_shots") || !jobData.has("circuit_files")) {
+        //#ifdef DEBUG
+        std::cout << "jobData" <<jobData << std::endl;
+        //#endif
+        if (!jobData || !jobData.has("shots") || !jobData.has("circuit")) {
             return crow::response(400, "Invalid Job Data");
         }
         // Extract job details from the request body
@@ -350,8 +351,15 @@ void startServer(int port) {
         std::string newJobId = generateUUID();
         // Simulate results (in the original, this comes from some quantum function)
         std::unordered_map<std::string,std::unordered_map<int, int>> results = parseStringToMap(resultCircuit);
+        std::cout << "DUMPING MAP" << std::endl;
+        for (const auto& [outerKey, innerMap] : results) {
+          std::cout << "Key: " << outerKey << "\n";
+          for (const auto& [innerKey, value] : innerMap) {
+            std::cout << "  [" << innerKey << "] => " << value << "\n";
+          }
+        }
         // Store the created job in the global jobs dictionary
-        createdJobs[newJobId] = {jobName, results[std::string("__global__")]};
+        createdJobs[newJobId] = results[std::string("__global__")];
 
         // Return the job ID as a JSON response
         crow::json::wvalue result_response;

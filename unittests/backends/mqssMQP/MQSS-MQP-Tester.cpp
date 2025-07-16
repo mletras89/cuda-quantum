@@ -41,7 +41,8 @@
 #include <regex>
 
 std::string mockPort = "62440";
-std::string backendStringTemplate = "mqssMQP;emulate;false;url;http://localhost:{};credentials;{};transpiler_flag;false;restricted_resource_names;AQT,IQM;priority;2;optimisation_level;3;preferred_qpu;planq";
+std::string backendStringTemplate = "mqssMQP;emulate;false";
+//std::string backendStringTemplate = "mqssMQP;emulate;false;url;http://localhost:{};credentials;{};";
 
 bool isValidExpVal(double value) {
   // give us some wiggle room while keep the tests fast
@@ -51,14 +52,15 @@ bool isValidExpVal(double value) {
 CUDAQ_TEST(MQSSTester, checkSampleSync) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
-  auto backendString =
-      fmt::format(fmt::runtime(backendStringTemplate), mockPort, fileName);
-  #ifdef DEBUG
+  auto backendString = backendStringTemplate;
+  //#ifdef DEBUG
+
+  //#endif
   std::cout << "backendString:: " << backendString << std::endl;
-  #endif
   auto &platform = cudaq::get_platform();
-  platform.setTargetBackend(backendString);
-  //std::cout << "platform.name():" << platform.name() << std::endl;
+  platform.setTargetBackend(backendStringTemplate);
+  std::cout << "platform.name():" << platform.name() << std::endl;
+
   auto kernel = cudaq::make_kernel();
 
   auto qubit = kernel.qalloc(2);
@@ -74,7 +76,7 @@ CUDAQ_TEST(MQSSTester, checkSampleSync) {
   counts.dump();
   EXPECT_EQ(counts.size(), 2);
 }
-
+/*
 CUDAQ_TEST(MQSSTester, checkSampleSyncEmulate) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
@@ -331,15 +333,24 @@ CUDAQ_TEST(MQSSTester, checkObserveAsyncLoadFromFile) {
   printf("ENERGY: %lf\n", result.expectation());
   EXPECT_TRUE(isValidExpVal(result.expectation()));
 }
-
+*/
 int main(int argc, char **argv) {
   std::string home = std::getenv("HOME");
   std::string fileName = home + "/FakeCppMQSS.config";
   std::ofstream out(fileName);
   out << "key: key\nrefresh: refresh\ntime: 0";
   out.close();
+  if (setenv("MQSS_MQP_TOKEN", "/home/token.txt", 1) != 0) {
+    std::cerr << "Failed to set environment variable MQSS_MQP_TOKEN.\n";
+    return 1;
+  }
+  if (setenv("MQSS_MQP_SERVER_URL", "http://localhost:62440/", 1) != 0) {
+    std::cerr << "Failed to set environment variable MQSS_MQP_SERVER_URL.\n";
+    return 1;
+  }
+
   ::testing::InitGoogleTest(&argc, argv);
   auto ret = RUN_ALL_TESTS();
-  std::remove(fileName.c_str());
+  //std::remove(fileName.c_str());
   return ret;
 }

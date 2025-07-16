@@ -44,5 +44,6 @@ target_link_libraries(CrowRestServer PRIVATE
 
 configure_file("MQSS-MQP-StartServerAndTest.sh.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/MQSS-MQP-StartServerAndTest.sh" @ONLY)
 configure_file("SimulateKernelLoweredToLLVM.py.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/SimulateKernelLoweredToLLVM.py" @ONLY)
+configure_file("token.txt.in" "${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/token.txt" @ONLY)
 
 add_test(NAME mqp-mqss-cpp-tests COMMAND bash MQSS-MQP-StartServerAndTest.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/unittests/backends/mqssMQP/)
