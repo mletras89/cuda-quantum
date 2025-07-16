@@ -67,19 +67,12 @@ public:
 
   void initialize(BackendConfig config) override {
     backendConfig = config;
-    // Set an alternate base URL if provided
-    auto iter = backendConfig.find("url");
-    if (iter != backendConfig.end()) {
-      mqpUrl = iter->second;
-      if (!mqpUrl.ends_with("/"))
-        mqpUrl += "/";
-    }
     // reading information from the configuration
     auto envConfiguration = getenv("MQSS_CONFIGURATION");
     if (envConfiguration) {
       std::map<std::string, std::string> customConfiguration = readKeyValueFileToMap(envConfiguration);
 
-      iter = customConfiguration.find("transpiler_flag");
+      auto iter = customConfiguration.find("transpiler_flag");
       if (iter != customConfiguration.end())
         quantumTask.transpiler_flag = parseBool(iter->second);
       iter = customConfiguration.find("preferred_qpu");
@@ -116,7 +109,7 @@ public:
     }
     std::ifstream file(envPath);
     if (!file) {
-        throw std::runtime_error("Failed to open file at path from MQSS_MQP_TOKEN: " + std::string(envPath));
+        return "";
     }
     std::stringstream buffer;
     buffer << file.rdbuf();
@@ -149,46 +142,12 @@ MQSSServerHelper::createJob(std::vector<KernelExecution> &circuitCodes) {
     // Construct the job itself
     ServerMessage j;
     // assigning circuit files object
-    //std::vector<std::string> circuit_files;
-    //circuit_files.push_back(circuitCode.code);
     j["circuit"] = circuitCode.code;
     j["circuit_format"] = "qasm"; // submitting quake to mqss
     j["resource_name"] = quantumTask.preferred_qpu;
     j["shots"] = shots;//quantumTask.n_shots;  
     j["no_modify"]  = quantumTask.no_modify;
     j["queued"]  = false;
- 
-    /*j["name"] = circuitCode.name;
-    j["task_id"] = "", // mqss has to assign id
-    j["n_qbits"] = quantumTask.n_qbits;
-    j["n_shots"] = shots;//quantumTask.n_shots;
-    // assigning circuit files object
-    std::vector<std::string> circuit_files;
-    circuit_files.push_back(circuitCode.code);
-    j["circuit_files"] = circuit_files;
-    j["circuit_file_type"] = "quake"; // submitting quake to mqss
-    j["preferred_qpu"] = quantumTask.preferred_qpu;
-    j["scheduled_qpu"] = "";  // mqss has to assign it
-    j["result_destination"] = quantumTask.result_destination;
-    j["priority"] = quantumTask.priority;
-    j["optimisation_level"] = quantumTask.optimisation_level;
-    j["no_modify"]  = quantumTask.no_modify;
-    j["transpiler_flag"] = quantumTask.transpiler_flag;
-    j["result_type"] = quantumTask.result_type;
-    j["circuits_qiskit"]= nlohmann::json::array();
-    j["additional_information"] = quantumTask.additional_information;
-    j["restricted_resource_names"] = quantumTask.restricted_resource_names;
-    j["user_identity"] = quantumTask.user_identity;
-    j["token"] =  quantumTask.token;
-    j["via_hpc"] = false; // via MQP*/
-    // Get the current time as a time_point
-    //auto now = std::chrono::system_clock::now();
-    //// Convert time_point to time_t (which holds time in seconds)
-    //std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-    //// Format the time as a string
-    //std::ostringstream timeStream;
-    //timeStream << std::put_time(std::localtime(&currentTime), "%Y-%m-%d %H:%M:%S");
-    //j["submit_time"] = timeStream.str();  
     messages.push_back(j);
   }
   // Get the headers
