@@ -902,6 +902,19 @@ void quake::SwapOp::getOperatorMatrix(Matrix &matrix) {
   matrix.assign({1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1});
 }
 
+void quake::RxxOp::getOperatorMatrix(Matrix &matrix) {
+  using namespace std::complex_literals;
+  double theta;
+  if (failed(getParameterAsDouble(getParameter(), theta)))
+    return;
+  if (getIsAdj())
+    theta *= -1;
+  matrix.assign({std::cos(theta / 2.), 0, 0, -1i * std::sin(theta / 2.),
+                0, std::cos(theta / 2.), -1i * std::sin(theta / 2.), 0,
+                0, -1 * std::sin(theta / 2.), std::cos(theta / 2.), 0,
+                -1 * std::sin(theta / 2.), 0, 0, std::cos(theta / 2.)});
+}
+
 void quake::TOp::getOperatorMatrix(Matrix &matrix) {
   using namespace llvm::numbers;
   if (getIsAdj())
@@ -1055,7 +1068,8 @@ void quake::getOperatorEffectsImpl(EffectsVectorImpl &effects,
 // clang-format off
 #define GATE_OPS(MACRO) MACRO(XOp) MACRO(YOp) MACRO(ZOp) MACRO(HOp) MACRO(SOp) \
   MACRO(TOp) MACRO(SwapOp) MACRO(U2Op) MACRO(U3Op) MACRO(R1Op) MACRO(RxOp)     \
-  MACRO(RyOp) MACRO(RzOp) MACRO(PhasedRxOp) MACRO(CustomUnitarySymbolOp)
+  MACRO(RyOp) MACRO(RzOp) MACRO(PhasedRxOp) MACRO(CustomUnitarySymbolOp) \
+  MACRO(RxxOp)
 #define MEASURE_OPS(MACRO) MACRO(MxOp) MACRO(MyOp) MACRO(MzOp)
 #define QUANTUM_OPS(MACRO) MACRO(ResetOp) MACRO(ExpPauliOp) GATE_OPS(MACRO)    \
   MEASURE_OPS(MACRO)

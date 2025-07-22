@@ -100,6 +100,7 @@ public:
     patterns.insert<
         ExpandPat<quake::HOp>, ExpandPat<quake::PhasedRxOp>,
         ExpandPat<quake::R1Op>, ExpandPat<quake::RxOp>, ExpandPat<quake::RyOp>,
+        ExpandPat<quake::RxxOp>,
         ExpandPat<quake::RzOp>, ExpandPat<quake::SOp>, ExpandPat<quake::SwapOp>,
         ExpandPat<quake::TOp>, ExpandPat<quake::U2Op>, ExpandPat<quake::U3Op>,
         ExpandPat<quake::XOp>, ExpandPat<quake::YOp>, ExpandPat<quake::ZOp>>(
@@ -110,6 +111,7 @@ public:
     target.addDynamicallyLegalOp<quake::PhasedRxOp>(
         checkLegal<quake::PhasedRxOp>);
     target.addDynamicallyLegalOp<quake::R1Op>(checkLegal<quake::R1Op>);
+    target.addDynamicallyLegalOp<quake::RxxOp>(checkLegal<quake::RxxOp>);
     target.addDynamicallyLegalOp<quake::RxOp>(checkLegal<quake::RxOp>);
     target.addDynamicallyLegalOp<quake::RyOp>(checkLegal<quake::RyOp>);
     target.addDynamicallyLegalOp<quake::RzOp>(checkLegal<quake::RzOp>);

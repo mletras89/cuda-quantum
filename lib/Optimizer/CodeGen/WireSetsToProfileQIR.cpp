@@ -425,6 +425,7 @@ struct WireSetToProfileQIRPass
                     GeneralRewrite<quake::SOp>, GeneralRewrite<quake::TOp>,
                     GeneralRewrite<quake::RxOp>, GeneralRewrite<quake::RyOp>,
                     GeneralRewrite<quake::RzOp>, GeneralRewrite<quake::R1Op>,
+                    GeneralRewrite<quake::RxxOp>,
                     GeneralRewrite<quake::U3Op>, GeneralRewrite<quake::SwapOp>,
                     GeneralRewrite<quake::PhasedRxOp>, BorrowWireRewrite,
                     ResetRewrite, ReturnWireRewrite>(quakeTypeConverter,

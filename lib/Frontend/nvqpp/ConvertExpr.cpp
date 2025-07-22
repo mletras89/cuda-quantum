@@ -1732,6 +1732,21 @@ bool QuakeBridgeVisitor::VisitCallExpr(clang::CallExpr *x) {
         swap->setAttr("negated_qubit_controls", negs);
       return true;
     }
+    if (funcName == "rxx") {
+      const auto size = args.size();
+      assert(size >= 2);
+      SmallVector<Value> targets(args.begin() + size - 2, args.end());
+      for (auto v : targets)
+        if (std::find(negations.begin(), negations.end(), v) != negations.end())
+          reportNegateError();
+      SmallVector<Value> ctrls(args.begin(), args.begin() + size - 2);
+      auto negs =
+          negatedControlsAttribute(builder.getContext(), ctrls, negations);
+      auto rxx = builder.create<quake::RxxOp>(loc, ctrls, targets);
+      if (negs)
+        rxx->setAttr("negated_qubit_controls", negs);
+      return true;
+    }
     if (funcName == "p" || funcName == "r1")
       return buildOp<quake::R1Op, Param>(builder, loc, args, negations,
                                          reportNegateError, isAdjoint,

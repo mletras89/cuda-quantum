@@ -28,6 +28,6 @@ namespace cudaq::opt {
 #define GATE_OPS(MACRO)                                                        \
   MACRO(XOp), MACRO(YOp), MACRO(ZOp), MACRO(HOp), MACRO(SOp), MACRO(TOp),      \
       MACRO(SwapOp), MACRO(R1Op), MACRO(RxOp), MACRO(PhasedRxOp), MACRO(RyOp), \
-      MACRO(RzOp), MACRO(U2Op), MACRO(U3Op)
+      MACRO(RzOp), MACRO(U2Op), MACRO(U3Op), MACRO(RxxOp)
 #define MEASURE_OPS(MACRO) MACRO(MxOp), MACRO(MyOp), MACRO(MzOp)
 #define QUANTUM_OPS(MACRO) GATE_OPS(MACRO), MEASURE_OPS(MACRO)
