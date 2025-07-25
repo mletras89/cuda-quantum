@@ -486,6 +486,24 @@ void __quantum__qis__swap__body(Qubit *q, Qubit *r) {
   __quantum__qis__swap(q, r);
 }
 
+void __quantum__qis__rxx(Qubit *q, Qubit *r) {
+  auto qI = qubitToSizeT(q);
+  auto rI = qubitToSizeT(r);
+  ScopedTraceWithContext("NVQIR::rxx", qI, rI);
+  nvqir::getCircuitSimulatorInternal()->rxx(qI, rI);
+}
+
+void __quantum__qis__rxx__ctl(Array *ctrls, Qubit *q, Qubit *r) {
+  auto ctrlIdxs = arrayToVectorSizeT(ctrls);
+  auto qI = qubitToSizeT(q);
+  auto rI = qubitToSizeT(r);
+  nvqir::getCircuitSimulatorInternal()->rxx(ctrlIdxs, qI, rI);
+}
+
+void __quantum__qis__rxx__body(Qubit *q, Qubit *r) {
+  __quantum__qis__rxx(q, r);
+}
+
 void __quantum__qis__cphase(double d, Qubit *q, Qubit *r) {
   auto qI = qubitToSizeT(q);
   auto rI = qubitToSizeT(r);

@@ -647,6 +647,78 @@ void swap(QuantumRegister &ctrls, qubit &src, qubit &target) {
 
 #endif // not C++20
 
+// Define the rxx gate instruction and control versions of it
+namespace types {
+struct rxx {
+  inline static const std::string name{"rxx"};
+};
+} // namespace types
+
+#if CUDAQ_USE_STD20
+template <typename mod = base, typename... QubitArgs>
+void rxx(QubitArgs &...args) {
+  static_assert(std::conjunction<std::is_same<qubit, QubitArgs>...>::value,
+                "Cannot operate on a qudit with Levels != 2");
+  constexpr std::size_t nArgs = sizeof...(QubitArgs);
+  std::vector<QuditInfo> qubitIds{qubitToQuditInfo(args)...};
+  if constexpr (nArgs == 2) {
+    getExecutionManager()->apply("rxx", {}, {}, qubitIds);
+    return;
+  } else {
+    static_assert(std::is_same_v<mod, ctrl>,
+                  "More than 2 qubits passed to rxx but modifier != ctrl.");
+  }
+
+  // Controls are all qubits except the last 2
+  std::vector<QuditInfo> controls(qubitIds.begin(),
+                                  qubitIds.begin() + qubitIds.size() - 2);
+  std::vector<QuditInfo> targets(qubitIds.end() - 2, qubitIds.end());
+  getExecutionManager()->apply("rxx", {}, controls, targets);
+}
+
+template <typename QuantumRegister>
+  requires(std::ranges::range<QuantumRegister>)
+void rxx(QuantumRegister &ctrls, qubit &src, qubit &target) {
+  std::vector<QuditInfo> controls;
+  std::transform(ctrls.begin(), ctrls.end(), std::back_inserter(controls),
+                 [](const auto &q) { return qubitToQuditInfo(q); });
+  getExecutionManager()->apply(
+      "rxx", {}, controls, {qubitToQuditInfo(src), qubitToQuditInfo(target)});
+}
+
+#else // not C++20
+
+template <typename Qubit>
+void rxx(Qubit &src, Qubit &target) {
+  static_assert(std::is_same<qubit, Qubit>::value,
+                "Cannot operate on a qudit with Levels != 2");
+  std::vector<QuditInfo> qubitIds{qubitToQuditInfo(src),
+                                  qubitToQuditInfo(target)};
+  getExecutionManager()->apply("rxx", {}, {}, qubitIds);
+}
+
+void crxx(qubit &ctrl, qubit &src, qubit &target) {
+  std::vector<QuditInfo> controls{qubitToQuditInfo(ctrl)};
+  std::vector<QuditInfo> targets{qubitToQuditInfo(src),
+                                 qubitToQuditInfo(target)};
+  getExecutionManager()->apply("rxx", {}, controls, targets);
+}
+
+template <typename QuantumRegister,
+          typename = std::enable_if_t<!std::is_same_v<
+              std::remove_reference_t<std::remove_cv_t<QuantumRegister>>,
+              cudaq::qubit>>>
+void rxx(QuantumRegister &ctrls, qubit &src, qubit &target) {
+  std::vector<QuditInfo> controls;
+  std::transform(ctrls.begin(), ctrls.end(), std::back_inserter(controls),
+                 [](const auto &q) { return qubitToQuditInfo(q); });
+  getExecutionManager()->apply(
+      "rxx", {}, controls, {qubitToQuditInfo(src), qubitToQuditInfo(target)});
+}
+
+#endif // not C++20
+
+
 #if CUDAQ_USE_STD20
 // Define common 2 qubit operations.
 inline void cnot(qubit &q, qubit &r) { x<cudaq::ctrl>(q, r); }

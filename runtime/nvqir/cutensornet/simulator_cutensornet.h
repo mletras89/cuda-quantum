@@ -87,6 +87,12 @@ public:
   void swap(const std::vector<std::size_t> &ctrlBits, const std::size_t srcIdx,
             const std::size_t tgtIdx) override;
 
+  /// Rxx gate implementation
+  // Note: cutensornetStateApplyControlledTensorOperator can only handle
+  // single-target.
+  void rxx(const std::vector<std::size_t> &ctrlBits, const std::size_t srcIdx,
+            const std::size_t tgtIdx) override;
+
   void setRandomSeed(std::size_t randomSeed) override;
 
 protected:

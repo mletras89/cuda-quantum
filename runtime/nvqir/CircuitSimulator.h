@@ -349,6 +349,16 @@ public:
   virtual void swap(const std::vector<std::size_t> &ctrlBits,
                     const std::size_t srcIdx, const std::size_t tgtIdx) = 0;
 
+  /// @brief Invoke the Rxx gate
+  void rxx(const std::size_t srcIdx, const std::size_t tgtIdx) {
+    std::vector<std::size_t> tmp;
+    rxx(tmp, srcIdx, tgtIdx);
+  }
+
+  /// @brief Invoke a general multi-control rxx gate
+  virtual void rxx(const std::vector<std::size_t> &ctrlBits,
+                    const std::size_t srcIdx, const std::size_t tgtIdx) = 0;
+
   /// @brief Measure the qubit with given index
   virtual bool mz(const std::size_t qubitIdx) = 0;
 
@@ -1374,6 +1384,21 @@ public:
         {1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
         {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}};
     enqueueGate("swap", matrix, ctrlBits,
+                std::vector<std::size_t>{srcIdx, tgtIdx}, {});
+  }
+
+  // TODO: simulator has to be fixed to work correctly as rxx gate
+  using CircuitSimulator::rxx;
+  /// @brief Invoke a general multi-control rxx gate
+  void rxx(const std::vector<std::size_t> &ctrlBits, const std::size_t srcIdx,
+            const std::size_t tgtIdx) override {
+    flushAnySamplingTasks();
+    cudaq::info(gateToString("rxx", ctrlBits, {}, {srcIdx, tgtIdx}));
+    std::vector<std::complex<ScalarType>> matrix{
+        {1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+        {1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+        {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}};
+    enqueueGate("rxx", matrix, ctrlBits,
                 std::vector<std::size_t>{srcIdx, tgtIdx}, {});
   }
 

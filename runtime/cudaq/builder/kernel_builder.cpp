@@ -830,6 +830,18 @@ void swap(ImplicitLocOpBuilder &builder, const std::vector<QuakeValue> &ctrls,
   builder.create<quake::SwapOp>(adjoint, ValueRange(), ctrlValues, qubitValues);
 }
 
+void rxx(ImplicitLocOpBuilder &builder, const std::vector<QuakeValue> &ctrls,
+          const std::vector<QuakeValue> &qubits, bool adjoint) {
+  cudaq::info("kernel_builder apply rxx");
+  std::vector<Value> ctrlValues;
+  std::vector<Value> qubitValues;
+  std::transform(ctrls.begin(), ctrls.end(), std::back_inserter(ctrlValues),
+                 [](auto &el) { return el.getValue(); });
+  std::transform(qubits.begin(), qubits.end(), std::back_inserter(qubitValues),
+                 [](auto &el) { return el.getValue(); });
+  builder.create<quake::RxxOp>(adjoint, ValueRange(), ctrlValues, qubitValues);
+}
+
 void checkAndUpdateRegName(quake::MeasurementInterface &measure) {
   auto regName = measure.getOptionalRegisterName();
   if (!regName.has_value() || regName.value().empty()) {

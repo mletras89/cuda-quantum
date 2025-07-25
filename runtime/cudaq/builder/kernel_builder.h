@@ -238,6 +238,10 @@ void swap(mlir::ImplicitLocOpBuilder &builder,
           const std::vector<QuakeValue> &ctrls,
           const std::vector<QuakeValue> &targets, bool adjoint = false);
 
+void rxx(mlir::ImplicitLocOpBuilder &builder,
+          const std::vector<QuakeValue> &ctrls,
+          const std::vector<QuakeValue> &targets, bool adjoint = false);
+
 void reset(mlir::ImplicitLocOpBuilder &builder, const QuakeValue &qubitOrQvec);
 
 void c_if(mlir::ImplicitLocOpBuilder &builder, QuakeValue &conditional,
@@ -702,6 +706,51 @@ public:
     // The last two args will be the two qubits to swap.
     const std::vector<QuakeValue> targets(values.end() - 2, values.end());
     details::swap(*opBuilder, controls, targets);
+  }
+
+  /// @brief RXX
+  void rxx(const QuakeValue &first, const QuakeValue &second) {
+    const std::vector<QuakeValue> empty;
+    const std::vector<QuakeValue> &qubits{first, second};
+    details::rxx(*opBuilder, empty, qubits);
+  }
+
+  /// @brief SWAP operation for performing a Fredkin gate between two qubits,
+  /// based on the state of input `control` qubit/s.
+  template <typename mod, typename = typename std::enable_if_t<
+                              std::is_same_v<mod, cudaq::ctrl>>>
+  void rxx(const QuakeValue &control, const QuakeValue &first,
+            const QuakeValue &second) {
+    const std::vector<QuakeValue> ctrl{control};
+    const std::vector<QuakeValue> targets{first, second};
+    details::rxx(*opBuilder, ctrl, targets);
+  }
+
+  /// @brief SWAP operation for performing a Fredkin gate between two qubits,
+  /// based on the state of an input vector of `controls`.
+  template <typename mod, typename = typename std::enable_if_t<
+                              std::is_same_v<mod, cudaq::ctrl>>>
+  void rxx(const std::vector<QuakeValue> &controls, const QuakeValue &first,
+            const QuakeValue &second) {
+    const std::vector<QuakeValue> targets{first, second};
+    details::rxx(*opBuilder, controls, targets);
+  }
+
+  /// @brief SWAP operation for performing a Fredkin gate between two qubits,
+  /// based on the state of a variadic input of control qubits and registers.
+  /// Note: the final two qubits in the variadic list will always be the qubits
+  /// that undergo a SWAP. This requires >=3 qubits in the arguments.
+  template <
+      typename mod, typename... QubitValues,
+      typename = typename std::enable_if_t<sizeof...(QubitValues) >= 3>,
+      typename = typename std::enable_if_t<std::is_same_v<mod, cudaq::ctrl>>>
+  void rxx(QubitValues... args) {
+    std::vector<QuakeValue> values{args...};
+    // Up until the last two arguments will be our controls.
+    const std::vector<QuakeValue> controls(values.begin(), values.end() - 2);
+    // The last two args will be the two qubits to swap.
+    const std::vector<QuakeValue> targets(values.end() - 2, values.end());
+    details::rxx(*opBuilder, controls, targets);
   }
 
   /// @brief Reset the given qubit or qubits.

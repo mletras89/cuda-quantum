@@ -519,6 +519,36 @@ void SimulatorTensorNetBase<ScalarType>::setToZeroState() {
 }
 
 template <typename ScalarType>
+void SimulatorTensorNetBase<ScalarType>::rxx(
+    const std::vector<std::size_t> &ctrlBits, const std::size_t srcIdx,
+    const std::size_t tgtIdx) {
+  if (ctrlBits.empty())
+    return nvqir::CircuitSimulatorBase<ScalarType>::rxx(ctrlBits, srcIdx,
+                                                         tgtIdx);
+  // TODO: you have to change thins to work with two targets and one
+  // parameter
+  // Controlled rxx (swap) gate: using cnot decomposition of rxx gate to perform
+  // decomposition.
+  // Note: cutensornetStateApplyControlledTensorOperator can only handle
+  // single-target.
+  const auto size = ctrlBits.size();
+  std::vector<std::size_t> ctls(size + 1);
+  std::copy(ctrlBits.begin(), ctrlBits.end(), ctls.begin());
+  {
+    ctls[size] = tgtIdx;
+    nvqir::CircuitSimulatorBase<ScalarType>::x(ctls, srcIdx);
+  }
+  {
+    ctls[size] = srcIdx;
+    nvqir::CircuitSimulatorBase<ScalarType>::x(ctls, tgtIdx);
+  }
+  {
+    ctls[size] = tgtIdx;
+    nvqir::CircuitSimulatorBase<ScalarType>::x(ctls, srcIdx);
+  }
+}
+
+template <typename ScalarType>
 void SimulatorTensorNetBase<ScalarType>::swap(
     const std::vector<std::size_t> &ctrlBits, const std::size_t srcIdx,
     const std::size_t tgtIdx) {

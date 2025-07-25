@@ -200,6 +200,8 @@ protected:
                 simulator()->u3(parameters[0], parameters[1], parameters[2],
                                 localC, localT[0]);
               })
+        .Case("rxx",
+              [&]() { simulator()->rxx(localC, localT[0], localT[1]); })
         .Case("swap",
               [&]() { simulator()->swap(localC, localT[0], localT[1]); })
         .Case("exp_pauli",
